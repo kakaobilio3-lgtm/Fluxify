@@ -4,9 +4,14 @@
 #  TEK DOSYA: tum kaynak kod bu dosyanin icindedir.
 #
 #  Kullanim:
-#   1) Bu dosyayi deponuzda  .github/workflows/build.yml  olarak kaydedin.
-#   2) GitHub > Actions > "FluxClock APK" > Run workflow.
-#   3) Calisma bitince sayfanin altindaki "FluxClock-apk" dosyasini indirin.
+#   1) Bu dosyanin yolu TAM OLARAK su olmali:  .github/workflows/build.yml
+#      (deponun ana dizinine koyulursa GitHub derleme CALISTIRMAZ).
+#   2) Dosyayi kaydedince derleme kendiliginden baslar. Elle baslatmak icin:
+#      Actions > "FluxClock APK" > Run workflow.
+#   3) Yesil tik cikinca APK: deponun  Releases  bolumunde
+#      "FluxClock-v<numara>.apk". Ayrica derleme ozet sayfasinda
+#      "Artifacts" altinda zip olarak da bulunur.
+#   NOT: Depo herkese aciksa Releases'teki APK de herkese acik olur.
 #
 #  Kalici imza (istege bagli ama onerilir). Settings > Secrets > Actions:
 #   KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
@@ -18,11 +23,11 @@ name: FluxClock APK
 on:
   workflow_dispatch:
   push:
-    paths:
-      - .github/workflows/build.yml
+    branches:
+      - "**"
 
 permissions:
-  contents: read
+  contents: write   # APK'yi Releases bolumune koymak icin gerekli
 
 jobs:
   build:
@@ -2217,9 +2222,4 @@ jobs:
             --min-sdk-version 36 --target-sdk-version 36 \
             --version-code "$VERSION_CODE" --version-name "1.0.$VERSION_CODE" out/res.zip
 
-          # Xposed API taslakları yalnızca derlemede kullanılır, APK'ye GİRMEZ.
-          javac -nowarn -encoding UTF-8 -source 8 -target 8 -bootclasspath "$ANDROID_JAR" \
-            -d out/stubs $(find stubs -name '*.java')
-          javac -encoding UTF-8 -source 8 -target 8 -bootclasspath "$ANDROID_JAR" \
-            -classpath out/stubs -d out/classes $(find src -name '*.java')
-      
+          # Xposed API taslakları yalnızca derlemede kullan
