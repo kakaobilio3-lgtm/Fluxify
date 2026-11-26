@@ -1,0 +1,1986 @@
+# =====================================================================
+#  Flux Saat Gecisi - ColorOS 17 LSPosed / Vector modulu
+#  TEK DOSYA: tum kaynak kod bu dosyanin icindedir.
+#
+#  Kullanim:
+#   1) Bu dosyayi deponuzda  .github/workflows/build.yml  olarak kaydedin.
+#   2) GitHub > Actions > "FluxClock APK" > Run workflow.
+#   3) Calisma bitince sayfanin altindaki "FluxClock-apk" dosyasini indirin.
+#
+#  Kalici imza (istege bagli ama onerilir). Settings > Secrets > Actions:
+#   KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
+#  Secret yoksa her derlemede yeni bir anahtar uretilir; bu durumda
+#  yeni surumu kurmadan once eskisini kaldirmaniz gerekir.
+# =====================================================================
+name: FluxClock APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/build.yml
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Android SDK bilesenleri
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          (yes || true) | "$SDKM" --licenses >/dev/null || true
+          "$SDKM" "platforms;android-35" "build-tools;35.0.0"
+          echo "ANDROID_JAR=$SDK/platforms/android-35/android.jar" >> "$GITHUB_ENV"
+          echo "BT=$SDK/build-tools/35.0.0" >> "$GITHUB_ENV"
+
+      - name: "Kaynaklar - manifest ve API taslaklari"
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "project/."
+          cat > 'project/AndroidManifest.xml' <<'FC_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.fluxclock.transition">
+              <application
+                  android:label="@string/app_name"
+                  android:icon="@android:drawable/ic_lock_idle_alarm"
+                  android:allowBackup="false">
+                  <meta-data android:name="xposedmodule" android:value="true" />
+                  <meta-data android:name="xposeddescription" android:value="@string/xposed_description" />
+                  <meta-data android:name="xposedminversion" android:value="93" />
+                  <meta-data android:name="xposedsharedprefs" android:value="true" />
+                  <meta-data android:name="xposedscope" android:resource="@array/xposed_scope" />
+                  <activity
+                      android:name=".SettingsActivity"
+                      android:exported="true"
+                      android:theme="@android:style/Theme.DeviceDefault">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                          <category android:name="de.robv.android.xposed.category.MODULE_SETTINGS" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          FC_EOF
+          mkdir -p "project/res/values"
+          cat > 'project/res/values/strings.xml' <<'FC_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">Flux Saat Geçişi</string>
+              <string name="xposed_description">Kilit ekranı saatini kilit açılırken ana ekrana akıcı bir geçişle taşır (ColorOS 17)</string>
+              <string-array name="xposed_scope">
+                  <item>com.android.systemui</item>
+                  <item>com.android.launcher</item>
+              </string-array>
+          </resources>
+          FC_EOF
+          mkdir -p "project/assets"
+          cat > 'project/assets/xposed_init' <<'FC_EOF'
+          com.fluxclock.transition.MainHook
+          FC_EOF
+          mkdir -p "project/stubs/de/robv/android/xposed"
+          cat > 'project/stubs/de/robv/android/xposed/IXposedHookLoadPackage.java' <<'FC_EOF'
+          package de.robv.android.xposed;
+          import de.robv.android.xposed.callbacks.XC_LoadPackage;
+          public interface IXposedHookLoadPackage {
+              void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) throws Throwable;
+          }
+          FC_EOF
+          mkdir -p "project/stubs/de/robv/android/xposed"
+          cat > 'project/stubs/de/robv/android/xposed/XC_MethodHook.java' <<'FC_EOF'
+          package de.robv.android.xposed;
+          import de.robv.android.xposed.callbacks.XCallback;
+          public abstract class XC_MethodHook extends XCallback {
+              public XC_MethodHook() {}
+              protected void beforeHookedMethod(MethodHookParam param) throws Throwable {}
+              protected void afterHookedMethod(MethodHookParam param) throws Throwable {}
+              public static final class MethodHookParam extends XCallback.Param {
+                  public Object thisObject;
+                  public Object[] args;
+              }
+              public class Unhook {}
+          }
+          FC_EOF
+          mkdir -p "project/stubs/de/robv/android/xposed"
+          cat > 'project/stubs/de/robv/android/xposed/XSharedPreferences.java' <<'FC_EOF'
+          package de.robv.android.xposed;
+          public final class XSharedPreferences {
+              public XSharedPreferences(String packageName, String prefFileName) {}
+              public synchronized void reload() { throw new RuntimeException("stub"); }
+              public boolean getBoolean(String k, boolean d) { throw new RuntimeException("stub"); }
+              public int getInt(String k, int d) { throw new RuntimeException("stub"); }
+              public String getString(String k, String d) { throw new RuntimeException("stub"); }
+          }
+          FC_EOF
+          mkdir -p "project/stubs/de/robv/android/xposed"
+          cat > 'project/stubs/de/robv/android/xposed/XposedBridge.java' <<'FC_EOF'
+          package de.robv.android.xposed;
+          import java.util.Set;
+          public final class XposedBridge {
+              public static void log(String text) { throw new RuntimeException("stub"); }
+              public static void log(Throwable t) { throw new RuntimeException("stub"); }
+              public static Set<XC_MethodHook.Unhook> hookAllMethods(Class<?> c, String m, XC_MethodHook cb) {
+                  throw new RuntimeException("stub");
+              }
+          }
+          FC_EOF
+          mkdir -p "project/stubs/de/robv/android/xposed/callbacks"
+          cat > 'project/stubs/de/robv/android/xposed/callbacks/XC_LoadPackage.java' <<'FC_EOF'
+          package de.robv.android.xposed.callbacks;
+          public abstract class XC_LoadPackage extends XCallback {
+              public static final class LoadPackageParam extends XCallback.Param {
+                  public String packageName;
+                  public String processName;
+                  public ClassLoader classLoader;
+              }
+          }
+          FC_EOF
+          mkdir -p "project/stubs/de/robv/android/xposed/callbacks"
+          cat > 'project/stubs/de/robv/android/xposed/callbacks/XCallback.java' <<'FC_EOF'
+          package de.robv.android.xposed.callbacks;
+          public abstract class XCallback {
+              public static abstract class Param {}
+          }
+          FC_EOF
+
+      - name: "Kaynak - MainHook.java"
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "project/src/com/fluxclock/transition"
+          cat > 'project/src/com/fluxclock/transition/MainHook.java' <<'FC_EOF'
+          package com.fluxclock.transition;
+
+          import android.app.Application;
+          import android.app.Instrumentation;
+
+          import de.robv.android.xposed.IXposedHookLoadPackage;
+          import de.robv.android.xposed.XC_MethodHook;
+          import de.robv.android.xposed.XposedBridge;
+          import de.robv.android.xposed.callbacks.XC_LoadPackage;
+
+          /** Modül giriş noktası (klasik Xposed API: LSPosed ve Vector destekler). */
+          public final class MainHook implements IXposedHookLoadPackage {
+
+              private static boolean installed;
+
+              @Override
+              public void handleLoadPackage(final XC_LoadPackage.LoadPackageParam lp) throws Throwable {
+                  final boolean systemUi = Const.SYSTEMUI.equals(lp.packageName);
+                  final boolean launcher = Const.LAUNCHER.equals(lp.packageName);
+                  if (!systemUi && !launcher) {
+                      return;
+                  }
+                  // Application hazır olduğunda kurulum yap: Context ve doğru ClassLoader elimizde olur.
+                  XposedBridge.hookAllMethods(Instrumentation.class, "callApplicationOnCreate",
+                          new XC_MethodHook() {
+                              @Override
+                              protected void afterHookedMethod(MethodHookParam param) {
+                                  try {
+                                      Application app = (Application) param.args[0];
+                                      synchronized (MainHook.class) {
+                                          if (installed || !lp.packageName.equals(app.getPackageName())) {
+                                              return;
+                                          }
+                                          installed = true;
+                                      }
+                                      if (systemUi) {
+                                          new SystemUiController(app).install(app.getClassLoader());
+                                      } else {
+                                          new LauncherAgent(app).install();
+                                      }
+                                      Const.log("kuruldu: " + lp.processName);
+                                  } catch (Throwable t) {
+                                      Const.error("kurulum hatası", t);
+                                  }
+                              }
+                          });
+              }
+          }
+          FC_EOF
+
+      - name: "Kaynak - Const.java"
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "project/src/com/fluxclock/transition"
+          cat > 'project/src/com/fluxclock/transition/Const.java' <<'FC_EOF'
+          package com.fluxclock.transition;
+
+          import android.app.PendingIntent;
+          import android.content.BroadcastReceiver;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.IntentFilter;
+          import android.os.Handler;
+          import android.view.View;
+
+          import java.lang.reflect.Method;
+
+          import de.robv.android.xposed.XposedBridge;
+
+          final class Const {
+              static final String PKG = "com.fluxclock.transition";
+              static final String SYSTEMUI = "com.android.systemui";
+              static final String LAUNCHER = "com.android.launcher";
+              static final String PREFS = "settings";
+              static final String TAG = "FluxClock: ";
+
+              /** SystemUI -> Launcher: "saat widget'ı nerede?" */
+              static final String ACTION_QUERY = PKG + ".QUERY";
+              /** Launcher -> SystemUI: widget konumu ve görüntüsü */
+              static final String ACTION_TARGET = PKG + ".TARGET";
+              /** SystemUI -> Launcher: uçuş sırasında widget'ı gizle / geri getir */
+              static final String ACTION_FLIGHT = PKG + ".FLIGHT";
+
+              static volatile boolean debug;
+
+              private static final int FLAG_IMMUTABLE = 0x04000000;
+              private static final int RECEIVER_EXPORTED = 0x2;
+
+              private Const() {
+              }
+
+              static void log(String msg) {
+                  XposedBridge.log(TAG + msg);
+              }
+
+              static void debug(String msg) {
+                  if (debug) {
+                      log(msg);
+                  }
+              }
+
+              static void error(String msg, Throwable t) {
+                  XposedBridge.log(TAG + msg);
+                  XposedBridge.log(t);
+              }
+
+              /** Gönderenin kimliğini kanıtlayan etiket (sistem tarafından doldurulur, taklit edilemez). */
+              static void sign(Context c, Intent i) {
+                  PendingIntent id = PendingIntent.getBroadcast(c, 0,
+                          new Intent(PKG + ".ID").setPackage(c.getPackageName()), FLAG_IMMUTABLE);
+                  i.putExtra("auth", id);
+              }
+
+              static boolean from(Intent i, String expectedPackage) {
+                  Object p = i.getParcelableExtra("auth");
+                  return p instanceof PendingIntent
+                          && expectedPackage.equals(((PendingIntent) p).getCreatorPackage());
+              }
+
+              static void register(Context c, BroadcastReceiver r, IntentFilter f, Handler h)
+                      throws Exception {
+                  Method m = Context.class.getMethod("registerReceiver", BroadcastReceiver.class,
+                          IntentFilter.class, String.class, Handler.class, int.class);
+                  m.invoke(c, r, f, null, h, RECEIVER_EXPORTED);
+              }
+
+              /**
+               * transitionAlpha, sistemin kendi setAlpha() animasyonlarıyla çakışmadan
+               * bir görünümü gizlememizi sağlar.
+               */
+              static void setHidden(View v, boolean hidden) {
+                  if (v == null) {
+                      return;
+                  }
+                  try {
+                      View.class.getMethod("setTransitionAlpha", float.class)
+                              .invoke(v, hidden ? 0f : 1f);
+                  } catch (Throwable t) {
+                      error("setTransitionAlpha kullanılamadı", t);
+                  }
+              }
+          }
+          FC_EOF
+
+      - name: "Kaynak - Snapshot.java"
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "project/src/com/fluxclock/transition"
+          cat > 'project/src/com/fluxclock/transition/Snapshot.java' <<'FC_EOF'
+          package com.fluxclock.transition;
+
+          import android.graphics.Bitmap;
+          import android.graphics.Canvas;
+          import android.graphics.Paint;
+          import android.graphics.Rect;
+          import android.graphics.RectF;
+          import android.graphics.Typeface;
+          import android.view.View;
+          import android.view.ViewParent;
+
+          import java.text.SimpleDateFormat;
+          import java.util.Date;
+          import java.util.Locale;
+
+          /** Bir görünümün görüntüsü + ekrandaki gerçek içerik dikdörtgeni. */
+          final class Snapshot {
+              final Bitmap bitmap;
+              final RectF rect;
+
+              Snapshot(Bitmap bitmap, RectF rect) {
+                  this.bitmap = bitmap;
+                  this.rect = rect;
+              }
+
+              /**
+               * Görünümü çizer ve saydam kenarları kırpar; böylece rakamlar rakamların üstüne oturur.
+               *
+               * @param viewOnScreen görünümün tamamının ekrandaki dikdörtgeni
+               * @return çizilemezse veya boşsa null
+               */
+              static Snapshot of(View v, RectF viewOnScreen) {
+                  int w = v.getWidth();
+                  int h = v.getHeight();
+                  if (w <= 0 || h <= 0 || (long) w * h > 8000000L) {
+                      return null;
+                  }
+                  try {
+                      Bitmap full = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+                      Canvas canvas = new Canvas(full);
+                      canvas.translate(-v.getScrollX(), -v.getScrollY());
+                      v.draw(canvas);
+                      Rect crop = opaqueBounds(full);
+                      if (crop == null) {
+                          return null;
+                      }
+                      Bitmap cut = Bitmap.createBitmap(full, crop.left, crop.top,
+                              crop.width(), crop.height());
+                      float sx = viewOnScreen.width() / w;
+                      float sy = viewOnScreen.height() / h;
+                      RectF r = new RectF(
+                              viewOnScreen.left + crop.left * sx,
+                              viewOnScreen.top + crop.top * sy,
+                              viewOnScreen.left + crop.right * sx,
+                              viewOnScreen.top + crop.bottom * sy);
+                      return new Snapshot(cut, r);
+                  } catch (Throwable t) {
+                      // Donanım bitmap'i / özel shader içeren görünümler yazılım tuvaline çizilemeyebilir.
+                      Const.debug("görüntü alınamadı " + v.getClass().getName() + ": " + t);
+                      return null;
+                  }
+              }
+
+              private static Rect opaqueBounds(Bitmap b) {
+                  int w = b.getWidth();
+                  int h = b.getHeight();
+                  int[] row = new int[w];
+                  int left = w, top = h, right = -1, bottom = -1;
+                  for (int y = 0; y < h; y++) {
+                      b.getPixels(row, 0, w, 0, y, w, 1);
+                      for (int x = 0; x < w; x++) {
+                          if ((row[x] >>> 24) > 24) {
+                              if (x < left) left = x;
+                              if (x > right) right = x;
+                              if (y < top) top = y;
+                              bottom = y;
+                          }
+                      }
+                  }
+                  if (right < left || bottom < top || right - left < 4 || bottom - top < 4) {
+                      return null;
+                  }
+                  return new Rect(left, top, right + 1, bottom + 1);
+              }
+
+              /** Sistem saati yazılım tuvaline çizilemezse kullanılan sade yedek. */
+              static Snapshot text(RectF where, boolean is24h) {
+                  int w = Math.max(8, Math.round(where.width()));
+                  int h = Math.max(8, Math.round(where.height()));
+                  String time = new SimpleDateFormat(is24h ? "HH:mm" : "h:mm", Locale.getDefault())
+                          .format(new Date());
+                  Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+                  p.setColor(0xFFFFFFFF);
+                  p.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+                  p.setTextSize(h);
+                  Rect bounds = new Rect();
+                  p.getTextBounds(time, 0, time.length(), bounds);
+                  float scale = Math.min((float) w / bounds.width(), (float) h / bounds.height());
+                  p.setTextSize(h * scale * 0.96f);
+                  p.getTextBounds(time, 0, time.length(), bounds);
+                  Bitmap b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+                  new Canvas(b).drawText(time, (w - bounds.width()) / 2f - bounds.left,
+                          (h - bounds.height()) / 2f - bounds.top, p);
+                  return new Snapshot(b, new RectF(where));
+              }
+
+              /** Ölçek ve kaydırma dahil, görünümün şu an ekranda kapladığı alan. */
+              static RectF visualRect(View v) {
+                  int[] loc = new int[2];
+                  v.getLocationOnScreen(loc);
+                  float sx = 1f, sy = 1f;
+                  Object cur = v;
+                  while (cur instanceof View) {
+                      sx *= ((View) cur).getScaleX();
+                      sy *= ((View) cur).getScaleY();
+                      cur = ((View) cur).getParent();
+                  }
+                  return new RectF(loc[0], loc[1],
+                          loc[0] + v.getWidth() * sx, loc[1] + v.getHeight() * sy);
+              }
+
+              /**
+               * Animasyonlardan etkilenmeyen "yerleşim" dikdörtgeni. Launcher kilit açılırken
+               * kendi ölçek animasyonunu oynatsa bile doğru hedefi verir.
+               */
+              static RectF layoutRect(View v) {
+                  float x = 0, y = 0;
+                  View cur = v;
+                  ViewParent parent = cur.getParent();
+                  while (parent instanceof View) {
+                      View p = (View) parent;
+                      x += cur.getLeft() - p.getScrollX();
+                      y += cur.getTop() - p.getScrollY();
+                      cur = p;
+                      parent = cur.getParent();
+                  }
+                  int[] root = new int[2];
+                  cur.getLocationOnScreen(root);
+                  x += root[0];
+                  y += root[1];
+                  return new RectF(x, y, x + v.getWidth(), y + v.getHeight());
+              }
+          }
+          FC_EOF
+
+      - name: "Kaynak - Spring.java"
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "project/src/com/fluxclock/transition"
+          cat > 'project/src/com/fluxclock/transition/Spring.java' <<'FC_EOF'
+          package com.fluxclock.transition;
+
+          import android.animation.TimeInterpolator;
+
+          /** Sönümlü yay eğrisi. damping=1 sekmesiz, küçüldükçe daha "zıplak". */
+          final class Spring implements TimeInterpolator {
+              private final double zeta;
+              private final double omega;
+              private final double end;
+
+              Spring(float damping) {
+                  zeta = Math.max(0.6, Math.min(1.0, damping));
+                  omega = 8.0 / zeta;
+                  end = raw(1.0);
+              }
+
+              private double raw(double t) {
+                  double decay = Math.exp(-zeta * omega * t);
+                  if (zeta >= 0.999) {
+                      return 1.0 - decay * (1.0 + omega * t);
+                  }
+                  double wd = omega * Math.sqrt(1.0 - zeta * zeta);
+                  return 1.0 - decay * (Math.cos(wd * t) + zeta * omega / wd * Math.sin(wd * t));
+              }
+
+              @Override
+              public float getInterpolation(float t) {
+                  if (t >= 1f) {
+                      return 1f;
+                  }
+                  return (float) (raw(t) / end);
+              }
+          }
+          FC_EOF
+
+      - name: "Kaynak - ClockFinder.java"
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "project/src/com/fluxclock/transition"
+          cat > 'project/src/com/fluxclock/transition/ClockFinder.java' <<'FC_EOF'
+          package com.fluxclock.transition;
+
+          import android.graphics.RectF;
+          import android.util.DisplayMetrics;
+          import android.view.View;
+          import android.view.ViewGroup;
+
+          import java.lang.reflect.Field;
+          import java.util.ArrayList;
+          import java.util.List;
+          import java.util.Locale;
+
+          /**
+           * Kilit ekranı saatini görünüm ağacında arar. Saat ayrı bir eklenti ClassLoader'ından
+           * yüklense bile çalışır, çünkü sınıfa değil canlı görünümlere bakar. Yalnızca gerektiğinde
+           * taranır; sürekli çalışan bir hook yoktur.
+           *
+           * Aday adların bir kısmı OPlus SystemUI üzerinde çalışan açık kaynak projelerde gözlenmiştir;
+           * cihazınızdaki ad farklıysa ayarlardaki "kilit saati ipucu" alanı kullanılır.
+           */
+          final class ClockFinder {
+
+              static final class Result {
+                  View view;
+                  int score;
+                  float area;
+                  RectF rect;
+              }
+
+              private ClockFinder() {
+              }
+
+              @SuppressWarnings("unchecked")
+              private static List<View> windowRoots() throws Exception {
+                  Class<?> c = Class.forName("android.view.WindowManagerGlobal");
+                  Object global = c.getMethod("getInstance").invoke(null);
+                  Field f = c.getDeclaredField("mViews");
+                  f.setAccessible(true);
+                  return new ArrayList<View>((List<View>) f.get(global));
+              }
+
+              /** Şu anda ekranda gerçekten görünen en iyi saat adayı; yoksa null. */
+              static Result findVisible(DisplayMetrics dm, String hint, boolean dump) {
+                  Result best = new Result();
+                  try {
+                      for (View root : windowRoots()) {
+                          if (root.getWindowVisibility() == View.VISIBLE) {
+                              walk(root, 1f, dm, hint.trim().toLowerCase(Locale.ROOT), best, dump);
+                          }
+                      }
+                  } catch (Throwable t) {
+                      Const.error("saat araması", t);
+                  }
+                  return best.view == null ? null : best;
+              }
+
+              private static void walk(View v, float alpha, DisplayMetrics dm, String hint,
+                      Result best, boolean dump) {
+                  if (v.getVisibility() != View.VISIBLE) {
+                      return;
+                  }
+                  alpha *= v.getAlpha();
+                  if (alpha < 0.2f) {
+                      return;
+                  }
+                  String cls = v.getClass().getName().toLowerCase(Locale.ROOT);
+                  // Durum çubuğu ve AOD alt ağaçları hiç taranmaz.
+                  if (cls.contains("phonestatusbarview") || cls.contains("keyguardstatusbarview")
+                          || cls.contains(".aod.")) {
+                      return;
+                  }
+                  String id = idName(v);
+                  if (dump && (cls.contains("clock") || id.contains("clock") || id.contains("time"))) {
+                      Const.log("aday: " + v.getClass().getName() + " id=" + id
+                              + " alan=" + Snapshot.visualRect(v));
+                  }
+                  int score = score(cls, id, hint);
+                  if (score > 0) {
+                      float w = v.getWidth();
+                      float h = v.getHeight();
+                      boolean sizeOk = w >= dm.widthPixels * 0.18f && h >= dm.heightPixels * 0.035f
+                              && w * h <= dm.widthPixels * (float) dm.heightPixels * 0.6f;
+                      if (sizeOk) {
+                          RectF r = Snapshot.visualRect(v);
+                          if (r.centerX() > 0 && r.centerX() < dm.widthPixels
+                                  && r.centerY() > 0 && r.centerY() < dm.heightPixels) {
+                              float area = r.width() * r.height();
+                              if (score > best.score || (score == best.score && area > best.area)) {
+                                  best.view = v;
+                                  best.score = score;
+                                  best.area = area;
+                                  best.rect = r;
+                              }
+                          }
+                      }
+                  }
+                  if (v instanceof ViewGroup) {
+                      ViewGroup g = (ViewGroup) v;
+                      for (int i = 0; i < g.getChildCount(); i++) {
+                          walk(g.getChildAt(i), alpha, dm, hint, best, dump);
+                      }
+                  }
+              }
+
+              private static String idName(View v) {
+                  int id = v.getId();
+                  // 0x7f.. ve sistem kaynakları dışındaki üretilmiş id'lerin adı yoktur.
+                  if (id == View.NO_ID || (id >>> 24) == 0) {
+                      return "";
+                  }
+                  try {
+                      return v.getResources().getResourceEntryName(id).toLowerCase(Locale.ROOT);
+                  } catch (Throwable ignored) {
+                      return "";
+                  }
+              }
+
+              private static int score(String cls, String id, String hint) {
+                  if (hint.length() > 0 && (cls.contains(hint) || id.contains(hint))) {
+                      return 1000;
+                  }
+                  String both = cls + " " + id;
+                  if (both.contains("aod") || both.contains("status_bar") || both.contains("statusbar")
+                          || both.contains("invisible") || both.contains("alarm")
+                          || both.contains("chronometer")) {
+                      return 0;
+                  }
+                  if (id.equals("visible_digital_time_view")) return 100;
+                  if (id.equals("clock_time_parent") || id.equals("clock_time_view")) return 96;
+                  if (cls.endsWith(".bigclockdigitaltimeview")) return 95;
+                  if (cls.endsWith(".clocktimeview")) return 90;
+                  if (id.startsWith("lockscreen_clock_view")) return 85;
+                  if (cls.endsWith(".animatableclockview")) return 80;
+                  if (cls.endsWith(".customopluskeyguardstyleclock")) return 62;
+                  if (id.equals("keyguard_clock_container")) return 60;
+                  if (cls.endsWith(".clockviewroot") || cls.endsWith(".keyguardclockswitch")) return 50;
+                  if (cls.contains("keyguard") && cls.contains("clock")) return 30;
+                  return 0;
+              }
+          }
+          FC_EOF
+
+      - name: "Kaynak - FlightOverlay.java"
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "project/src/com/fluxclock/transition"
+          cat > 'project/src/com/fluxclock/transition/FlightOverlay.java' <<'FC_EOF'
+          package com.fluxclock.transition;
+
+          import android.animation.Animator;
+          import android.animation.AnimatorListenerAdapter;
+          import android.animation.ValueAnimator;
+          import android.content.Context;
+          import android.graphics.Bitmap;
+          import android.graphics.PixelFormat;
+          import android.graphics.RectF;
+          import android.view.Display;
+          import android.view.View;
+          import android.view.ViewTreeObserver;
+          import android.view.WindowManager;
+          import android.view.animation.LinearInterpolator;
+          import android.widget.FrameLayout;
+          import android.widget.ImageView;
+
+          /**
+           * Kilit ekranı penceresinin üstünde uçan saat. Her karede yalnızca translation/scale/alpha
+           * değişir (RenderThread özellikleri); bitmap yeniden çizilmez, bellek ayrılmaz.
+           */
+          final class FlightOverlay {
+
+              interface Listener {
+                  /** İlk kare hazır: orijinal saat artık gizlenebilir. */
+                  void onVisible();
+
+                  /** Hedefe varıldı: gerçek widget artık gösterilebilir. */
+                  void onLanded();
+
+                  /** Katman kaldırıldı. */
+                  void onRemoved();
+              }
+
+              private static final int TYPE_STATUS_BAR_SUB_PANEL = 2017;
+              private static final int TYPE_APPLICATION_OVERLAY = 2038;
+
+              private final Context context;
+              private final WindowManager wm;
+              private final Listener listener;
+              private final Snapshot source;
+              private final FrameLayout root;
+              private final ImageView from;
+              private final ImageView to;
+              private final RectF goal = new RectF();
+              private final RectF smooth = new RectF();
+              private final RectF now = new RectF();
+              private final int[] origin = new int[2];
+              private Bitmap targetBitmap;
+              private boolean fadeAtEnd;
+              private ValueAnimator animator;
+              private boolean removed;
+              private boolean landed;
+
+              FlightOverlay(Context context, Snapshot source, Listener listener) {
+                  this.context = context;
+                  this.source = source;
+                  this.listener = listener;
+                  wm = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+                  root = new FrameLayout(context);
+                  from = image(source.bitmap);
+                  to = image(null);
+                  to.setAlpha(0f);
+              }
+
+              private ImageView image(Bitmap b) {
+                  ImageView v = new ImageView(context);
+                  v.setScaleType(ImageView.ScaleType.FIT_XY);
+                  v.setPivotX(0f);
+                  v.setPivotY(0f);
+                  if (b != null) {
+                      v.setImageBitmap(b);
+                      root.addView(v, new FrameLayout.LayoutParams(b.getWidth(), b.getHeight()));
+                  } else {
+                      v.setVisibility(View.INVISIBLE);
+                  }
+                  return v;
+              }
+
+              /** Uçuş sırasında da çağrılabilir; hedef yumuşakça güncellenir. */
+              void setTarget(RectF rect, Bitmap bitmap, boolean fadeOut) {
+                  if (removed || landed) {
+                      return;
+                  }
+                  goal.set(rect);
+                  if (smooth.isEmpty()) {
+                      smooth.set(rect);
+                  }
+                  fadeAtEnd = fadeOut;
+                  if (bitmap != null) {
+                      targetBitmap = bitmap;
+                      to.setImageBitmap(bitmap);
+                      if (to.getParent() == null) {
+                          root.addView(to, new FrameLayout.LayoutParams(
+                                  bitmap.getWidth(), bitmap.getHeight()));
+                      } else {
+                          to.setLayoutParams(new FrameLayout.LayoutParams(
+                                  bitmap.getWidth(), bitmap.getHeight()));
+                      }
+                      to.setVisibility(View.VISIBLE);
+                  } else {
+                      targetBitmap = null;
+                      to.setVisibility(View.INVISIBLE);
+                  }
+              }
+
+              boolean show(final long duration, final float damping) {
+                  if (!addWindow(TYPE_STATUS_BAR_SUB_PANEL) && !addWindow(TYPE_APPLICATION_OVERLAY)) {
+                      return false;
+                  }
+                  root.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+                      @Override
+                      public boolean onPreDraw() {
+                          root.getViewTreeObserver().removeOnPreDrawListener(this);
+                          try {
+                              root.getLocationOnScreen(origin);
+                              apply(0f, 0f);
+                              root.post(new Runnable() {
+                                  @Override
+                                  public void run() {
+                                      start(duration, damping);
+                                  }
+                              });
+                          } catch (Throwable t) {
+                              Const.error("ilk kare", t);
+                              remove();
+                          }
+                          return true;
+                      }
+                  });
+                  return true;
+              }
+
+              private boolean addWindow(int type) {
+                  try {
+                      WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                              WindowManager.LayoutParams.MATCH_PARENT,
+                              WindowManager.LayoutParams.MATCH_PARENT,
+                              type,
+                              WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                                      | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                                      | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                                      | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                                      | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+                              PixelFormat.TRANSLUCENT);
+                      lp.setTitle("FluxClockFlight");
+                      lp.windowAnimations = 0;
+                      setIntField(lp, "layoutInDisplayCutoutMode", 3); // ALWAYS
+                      invokeInt(lp, "setFitInsetsTypes", 0);
+                      // Uçuş boyunca panelin en yüksek yenileme hızını iste (ör. 120 Hz).
+                      setFloatField(lp, "preferredRefreshRate", maxRefreshRate());
+                      wm.addView(root, lp);
+                      return true;
+                  } catch (Throwable t) {
+                      Const.debug("pencere eklenemedi type=" + type + ": " + t);
+                      return false;
+                  }
+              }
+
+              private float maxRefreshRate() {
+                  float max = 60f;
+                  Display d = wm.getDefaultDisplay();
+                  for (float r : d.getSupportedRefreshRates()) {
+                      max = Math.max(max, r);
+                  }
+                  return max;
+              }
+
+              private static void setIntField(Object o, String name, int value) {
+                  try {
+                      o.getClass().getField(name).setInt(o, value);
+                  } catch (Throwable ignored) {
+                      Const.debug(name + " yok");
+                  }
+              }
+
+              private static void setFloatField(Object o, String name, float value) {
+                  try {
+                      o.getClass().getField(name).setFloat(o, value);
+                  } catch (Throwable ignored) {
+                      Const.debug(name + " yok");
+                  }
+              }
+
+              private static void invokeInt(Object o, String name, int value) {
+                  try {
+                      o.getClass().getMethod(name, int.class).invoke(o, value);
+                  } catch (Throwable ignored) {
+                      Const.debug(name + " yok");
+                  }
+              }
+
+              private void start(long duration, float damping) {
+                  if (removed) {
+                      return;
+                  }
+                  listener.onVisible();
+                  final Spring spring = new Spring(damping);
+                  animator = ValueAnimator.ofFloat(0f, 1f);
+                  animator.setDuration(duration);
+                  animator.setInterpolator(new LinearInterpolator());
+                  animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                      private long last;
+
+                      @Override
+                      public void onAnimationUpdate(ValueAnimator a) {
+                          long t = System.nanoTime();
+                          float dt = last == 0 ? 0.008f : (t - last) / 1e9f;
+                          last = t;
+                          float linear = (Float) a.getAnimatedValue();
+                          // Hedef değişirse sıçrama olmadan yaklaş (kare hızından bağımsız).
+                          float k = 1f - (float) Math.exp(-dt * 28f);
+                          k = Math.max(k, linear * linear * linear);
+                          smooth.left += (goal.left - smooth.left) * k;
+                          smooth.top += (goal.top - smooth.top) * k;
+                          smooth.right += (goal.right - smooth.right) * k;
+                          smooth.bottom += (goal.bottom - smooth.bottom) * k;
+                          apply(spring.getInterpolation(linear), linear);
+                      }
+                  });
+                  animator.addListener(new AnimatorListenerAdapter() {
+                      @Override
+                      public void onAnimationEnd(Animator a) {
+                          if (removed) {
+                              return;
+                          }
+                          smooth.set(goal);
+                          apply(1f, 1f);
+                          landed = true;
+                          listener.onLanded();
+                          // Kısa bindirme: launcher widget'ı geri getirirken boşluk görünmez.
+                          root.animate().alpha(0f).setStartDelay(70).setDuration(130)
+                                  .withEndAction(new Runnable() {
+                                      @Override
+                                      public void run() {
+                                          remove();
+                                      }
+                                  });
+                      }
+                  });
+                  animator.start();
+              }
+
+              private void apply(float p, float linear) {
+                  RectF s = source.rect;
+                  now.set(s.left + (smooth.left - s.left) * p,
+                          s.top + (smooth.top - s.top) * p,
+                          s.right + (smooth.right - s.right) * p,
+                          s.bottom + (smooth.bottom - s.bottom) * p);
+                  place(from, source.bitmap);
+                  if (targetBitmap != null) {
+                      place(to, targetBitmap);
+                      from.setAlpha(1f - ramp(linear, 0.12f, 0.62f));
+                      to.setAlpha(ramp(linear, 0.18f, 0.68f));
+                  } else {
+                      from.setAlpha(fadeAtEnd ? 1f - ramp(linear, 0.55f, 1f) : 1f);
+                  }
+              }
+
+              /** En-boy oranını bozmadan dikdörtgenin içine ortalar. */
+              private void place(ImageView v, Bitmap b) {
+                  float scale = Math.min(now.width() / b.getWidth(), now.height() / b.getHeight());
+                  v.setScaleX(scale);
+                  v.setScaleY(scale);
+                  v.setTranslationX(now.centerX() - b.getWidth() * scale / 2f - origin[0]);
+                  v.setTranslationY(now.centerY() - b.getHeight() * scale / 2f - origin[1]);
+              }
+
+              private static float ramp(float x, float a, float b) {
+                  float t = Math.max(0f, Math.min(1f, (x - a) / (b - a)));
+                  return t * t * (3f - 2f * t);
+              }
+
+              boolean isLanded() {
+                  return landed;
+              }
+
+              void remove() {
+                  if (removed) {
+                      return;
+                  }
+                  removed = true;
+                  if (animator != null) {
+                      animator.cancel();
+                  }
+                  try {
+                      root.animate().cancel();
+                      wm.removeViewImmediate(root);
+                  } catch (Throwable t) {
+                      Const.debug("katman kaldırılamadı: " + t);
+                  }
+                  listener.onRemoved();
+              }
+          }
+          FC_EOF
+
+      - name: "Kaynak - SystemUiController.java"
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "project/src/com/fluxclock/transition"
+          cat > 'project/src/com/fluxclock/transition/SystemUiController.java' <<'FC_EOF'
+          package com.fluxclock.transition;
+
+          import android.app.ActivityManager;
+          import android.app.Application;
+          import android.app.KeyguardManager;
+          import android.content.BroadcastReceiver;
+          import android.content.ComponentName;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.IntentFilter;
+          import android.content.pm.PackageManager;
+          import android.content.pm.ResolveInfo;
+          import android.graphics.Bitmap;
+          import android.graphics.BitmapFactory;
+          import android.graphics.RectF;
+          import android.os.Handler;
+          import android.os.Looper;
+          import android.os.PowerManager;
+          import android.os.SystemClock;
+          import android.provider.Settings;
+          import android.text.format.DateFormat;
+          import android.util.DisplayMetrics;
+          import android.view.View;
+          import android.view.WindowManager;
+
+          import java.lang.ref.WeakReference;
+          import java.util.List;
+
+          import de.robv.android.xposed.XC_MethodHook;
+          import de.robv.android.xposed.XSharedPreferences;
+          import de.robv.android.xposed.XposedBridge;
+
+          /** Kilit açılışını yakalar ve saat uçuşunu yönetir. Tüm durum ana iş parçacığındadır. */
+          final class SystemUiController {
+
+              /** Launcher'dan gelen son bilinen hedef. */
+              private static final class Target {
+                  boolean found;
+                  RectF rect;
+                  Bitmap bitmap;
+                  int screenW;
+              }
+
+              private final Application app;
+              private final Handler main = new Handler(Looper.getMainLooper());
+              private final XSharedPreferences prefs = new XSharedPreferences(Const.PKG, Const.PREFS);
+
+              private Target cached;
+              private WeakReference<View> restView = new WeakReference<View>(null);
+              private Snapshot rest;
+              private int restScreenW;
+              private FlightOverlay overlay;
+              private View hiddenClock;
+              private View pendingClock;
+              private Snapshot flightSource;
+              private boolean launcherHidden;
+              private boolean visible;
+              private boolean liveTargetUsed;
+              private long lastTrigger;
+              private long request;
+              private Runnable pendingStart;
+
+              private final Runnable rememberRest = new Runnable() {
+                  @Override
+                  public void run() {
+                      try {
+                          captureRest();
+                      } catch (Throwable t) {
+                          Const.error("dinlenme konumu", t);
+                      }
+                  }
+              };
+
+              private final Runnable watchdog = new Runnable() {
+                  @Override
+                  public void run() {
+                      cancel("zaman aşımı");
+                  }
+              };
+
+              SystemUiController(Application app) {
+                  this.app = app;
+              }
+
+              void install(ClassLoader loader) throws Exception {
+                  reload();
+                  registerReceivers();
+                  int n = 0;
+                  n += hook(loader, "com.android.systemui.statusbar.phone.StatusBarKeyguardViewManager",
+                          "hide", false);
+                  n += hook(loader, "com.android.systemui.statusbar.policy.KeyguardStateControllerImpl",
+                          "notifyKeyguardGoingAway", true);
+                  n += hook(loader, "com.android.systemui.keyguard.KeyguardViewMediator",
+                          "keyguardGoingAway", false);
+                  n += hook(loader, "com.android.systemui.keyguard.KeyguardViewMediator",
+                          "handleStartKeyguardExitAnimation", false);
+                  Const.log("SystemUI kilit açma hook sayısı: " + n
+                          + (n == 0 ? " (yalnızca USER_PRESENT yedeği kullanılacak)" : ""));
+              }
+
+              private int hook(ClassLoader loader, String className, final String method,
+                      final boolean needsTrueArg) {
+                  try {
+                      Class<?> c = Class.forName(className, false, loader);
+                      int count = XposedBridge.hookAllMethods(c, method, new XC_MethodHook() {
+                          @Override
+                          protected void beforeHookedMethod(MethodHookParam param) {
+                              try {
+                                  if (needsTrueArg && !(param.args.length > 0
+                                          && Boolean.TRUE.equals(param.args[0]))) {
+                                      return;
+                                  }
+                                  onUnlockSignal(method);
+                              } catch (Throwable t) {
+                                  Const.error(method, t);
+                              }
+                          }
+                      }).size();
+                      Const.log(className + "#" + method + " -> " + count);
+                      return count;
+                  } catch (Throwable t) {
+                      Const.log("bulunamadı: " + className);
+                      return 0;
+                  }
+              }
+
+              private void onUnlockSignal(final String source) {
+                  Runnable r = new Runnable() {
+                      @Override
+                      public void run() {
+                          try {
+                              trigger(source);
+                          } catch (Throwable t) {
+                              Const.error("geçiş başlatılamadı", t);
+                              cancel("hata");
+                          }
+                      }
+                  };
+                  // Ana iş parçacığındaysak hemen çalış: saat henüz ekranda.
+                  if (Looper.myLooper() == Looper.getMainLooper()) {
+                      r.run();
+                  } else {
+                      main.post(r);
+                  }
+              }
+
+              private void registerReceivers() throws Exception {
+                  IntentFilter f = new IntentFilter();
+                  f.addAction(Intent.ACTION_SCREEN_ON);
+                  f.addAction(Intent.ACTION_SCREEN_OFF);
+                  f.addAction(Intent.ACTION_USER_PRESENT);
+                  f.addAction(Const.ACTION_TARGET);
+                  Const.register(app, new BroadcastReceiver() {
+                      @Override
+                      public void onReceive(Context c, Intent i) {
+                          try {
+                              String a = i.getAction();
+                              if (Intent.ACTION_SCREEN_ON.equals(a)) {
+                                  reload();
+                                  main.removeCallbacks(rememberRest);
+                                  main.postDelayed(rememberRest, 800);
+                              } else if (Intent.ACTION_SCREEN_OFF.equals(a)) {
+                                  main.removeCallbacks(rememberRest);
+                                  cancel("ekran kapandı");
+                                  lastTrigger = 0;
+                                  reload();
+                              } else if (Intent.ACTION_USER_PRESENT.equals(a)) {
+                                  trigger("USER_PRESENT");
+                              } else if (Const.ACTION_TARGET.equals(a)
+                                      && Const.from(i, Const.LAUNCHER)) {
+                                  onTarget(i);
+                              }
+                          } catch (Throwable t) {
+                              Const.error("SystemUI receiver", t);
+                          }
+                      }
+                  }, f, main);
+              }
+
+              private void reload() {
+                  try {
+                      prefs.reload();
+                      Const.debug = prefs.getBoolean("debug", false);
+                  } catch (Throwable t) {
+                      Const.error("ayarlar okunamadı", t);
+                  }
+              }
+
+              private DisplayMetrics metrics() {
+                  DisplayMetrics dm = new DisplayMetrics();
+                  ((WindowManager) app.getSystemService(Context.WINDOW_SERVICE))
+                          .getDefaultDisplay().getRealMetrics(dm);
+                  return dm;
+              }
+
+              private void captureRest() {
+                  KeyguardManager km = (KeyguardManager) app.getSystemService(Context.KEYGUARD_SERVICE);
+                  if (overlay != null || !km.isKeyguardLocked()) {
+                      return;
+                  }
+                  DisplayMetrics dm = metrics();
+                  ClockFinder.Result found = ClockFinder.findVisible(
+                          dm, prefs.getString("lockHint", ""), Const.debug);
+                  if (found == null) {
+                      Const.debug("kilit ekranında saat adayı bulunamadı");
+                      return;
+                  }
+                  Snapshot s = Snapshot.of(found.view, found.rect);
+                  rest = s != null ? s : Snapshot.text(found.rect, DateFormat.is24HourFormat(app));
+                  restView = new WeakReference<View>(found.view);
+                  restScreenW = dm.widthPixels;
+                  Const.debug("saat: " + found.view.getClass().getName() + " " + rest.rect
+                          + (s == null ? " (yedek yazı)" : ""));
+                  // Ana ekran hedefini kilit açılmadan önce tazele.
+                  query(0);
+              }
+
+              private void trigger(String source) {
+                  long time = SystemClock.uptimeMillis();
+                  if (!prefs.getBoolean("enabled", true) || overlay != null || pendingStart != null
+                          || time - lastTrigger < 2500) {
+                      return;
+                  }
+                  PowerManager pm = (PowerManager) app.getSystemService(Context.POWER_SERVICE);
+                  if (!pm.isInteractive() || animationsDisabled()) {
+                      return;
+                  }
+                  String top = topPackage();
+                  String homePkg = homePackage();
+                  if (top != null && homePkg != null && !top.equals(homePkg)) {
+                      Const.debug("hedef ana ekran değil: " + top);
+                      return;
+                  }
+
+                  final DisplayMetrics dm = metrics();
+                  ClockFinder.Result live = ClockFinder.findVisible(
+                          dm, prefs.getString("lockHint", ""), false);
+                  Snapshot source0 = null;
+                  View clockView = null;
+                  if (live != null) {
+                      clockView = live.view;
+                      source0 = Snapshot.of(live.view, live.rect);
+                      if (source0 == null) {
+                          source0 = Snapshot.text(live.rect, DateFormat.is24HourFormat(app));
+                      }
+                  } else if (rest != null && restScreenW == dm.widthPixels) {
+                      // Ekran yönü veya katlanır ekran değiştiyse eski konum kullanılmaz.
+                      // Saat kaydırmayla solmuş/gizlenmiş: dinlenme konumunu kullan, saati tazele.
+                      clockView = restView.get();
+                      if (clockView != null && clockView.isAttachedToWindow()) {
+                          source0 = Snapshot.of(clockView, rest.rect);
+                      }
+                      if (source0 == null) {
+                          source0 = Snapshot.text(rest.rect, DateFormat.is24HourFormat(app));
+                      }
+                  }
+                  if (source0 == null) {
+                      Const.debug("kaynak saat yok (" + source + ")");
+                      return;
+                  }
+                  lastTrigger = time;
+                  Const.debug("geçiş tetiklendi: " + source);
+
+                  final Snapshot from = source0;
+                  final View clock = clockView;
+                  request = time;
+                  liveTargetUsed = false;
+                  final boolean manual = prefs.getBoolean("manual", false);
+                  if (!manual) {
+                      query(request);
+                  }
+                  pendingStart = new Runnable() {
+                      @Override
+                      public void run() {
+                          pendingStart = null;
+                          try {
+                              begin(from, clock, dm);
+                          } catch (Throwable t) {
+                              Const.error("uçuş", t);
+                              cancel("hata");
+                          }
+                      }
+                  };
+                  // Bilinen hedef varsa beklemeden başla; yoksa launcher'a kısa bir süre tanı.
+                  if (manual || usable(cached, dm)) {
+                      pendingStart.run();
+                  } else {
+                      main.postDelayed(pendingStart, 110);
+                  }
+              }
+
+              private static boolean usable(Target t, DisplayMetrics dm) {
+                  return t != null && t.found && t.screenW == dm.widthPixels;
+              }
+
+              private void begin(Snapshot from, View clock, DisplayMetrics dm) {
+                  final long duration = Math.max(200, Math.min(1500, prefs.getInt("duration", 520)));
+                  final float damping = prefs.getInt("damping", 86) / 100f;
+                  final boolean manual = prefs.getBoolean("manual", false);
+
+                  FlightOverlay flight = new FlightOverlay(app, from, new FlightOverlay.Listener() {
+                      @Override
+                      public void onVisible() {
+                          visible = true;
+                          hiddenClock = pendingClock;
+                          Const.setHidden(hiddenClock, true);
+                          if (liveTargetUsed) {
+                              flightMessage(true, duration + 700);
+                          }
+                      }
+
+                      @Override
+                      public void onLanded() {
+                          if (launcherHidden) {
+                              flightMessage(false, 0);
+                          }
+                      }
+
+                      @Override
+                      public void onRemoved() {
+                          finish();
+                      }
+                  });
+
+                  if (manual) {
+                      float w = dm.widthPixels * prefs.getInt("manualW", 60) / 100f;
+                      float h = w * from.rect.height() / from.rect.width();
+                      float cx = dm.widthPixels * prefs.getInt("manualX", 50) / 100f;
+                      float cy = dm.heightPixels * prefs.getInt("manualY", 20) / 100f;
+                      flight.setTarget(new RectF(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2),
+                              null, true);
+                  } else if (usable(cached, dm)) {
+                      flight.setTarget(cached.rect, cached.bitmap, false);
+                      liveTargetUsed = true;
+                  } else if (prefs.getBoolean("statusFallback", true)) {
+                      flight.setTarget(statusBarRect(from, dm), null, true);
+                  } else {
+                      Const.debug("hedef yok, animasyon atlandı");
+                      return;
+                  }
+                  overlay = flight;
+                  flightSource = from;
+                  pendingClock = clock;
+                  visible = false;
+                  main.postDelayed(watchdog, duration + 1500);
+                  if (!flight.show(duration, damping)) {
+                      Const.log("animasyon penceresi açılamadı");
+                      cancel("pencere yok");
+                  }
+              }
+
+              private RectF statusBarRect(Snapshot from, DisplayMetrics dm) {
+                  int id = app.getResources().getIdentifier("status_bar_height", "dimen", "android");
+                  float bar = id > 0 ? app.getResources().getDimensionPixelSize(id) : 32 * dm.density;
+                  float h = 15 * dm.density;
+                  float w = Math.min(64 * dm.density, h * from.rect.width() / from.rect.height());
+                  float left = 18 * dm.density;
+                  float top = (bar - h) / 2f;
+                  return new RectF(left, top, left + w, top + h);
+              }
+
+              private void onTarget(Intent i) {
+                  Target t = new Target();
+                  t.found = i.getBooleanExtra("found", false);
+                  t.screenW = i.getIntExtra("screenW", 0);
+                  if (t.found) {
+                      float[] r = i.getFloatArrayExtra("rect");
+                      if (r == null || r.length != 4 || !(r[2] > r[0]) || !(r[3] > r[1])) {
+                          return;
+                      }
+                      t.rect = new RectF(r[0], r[1], r[2], r[3]);
+                      byte[] png = i.getByteArrayExtra("png");
+                      if (png != null) {
+                          t.bitmap = BitmapFactory.decodeByteArray(png, 0, png.length);
+                      }
+                  }
+                  cached = t;
+                  long id = i.getLongExtra("request", 0);
+                  if (id == 0 || id != request || prefs.getBoolean("manual", false)) {
+                      return;
+                  }
+                  DisplayMetrics dm = metrics();
+                  if (pendingStart != null) {
+                      Runnable r = pendingStart;
+                      main.removeCallbacks(r);
+                      r.run();
+                  } else if (overlay != null && !overlay.isLanded()) {
+                      if (usable(t, dm)) {
+                          overlay.setTarget(t.rect, t.bitmap, false);
+                          liveTargetUsed = true;
+                          if (visible) {
+                              flightMessage(true, 1500);
+                          }
+                      } else if (liveTargetUsed && prefs.getBoolean("statusFallback", true)) {
+                          // Önbellek eskiydi: bu sayfada artık saat widget'ı yok.
+                          liveTargetUsed = false;
+                          overlay.setTarget(statusBarRect(flightSource, dm), null, true);
+                          if (launcherHidden) {
+                              flightMessage(false, 0);
+                          }
+                      }
+                  }
+              }
+
+              private void query(long id) {
+                  Intent q = new Intent(Const.ACTION_QUERY).setPackage(Const.LAUNCHER);
+                  // Kilit açılışında öncelikli teslim.
+                  q.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
+                  Const.sign(app, q);
+                  q.putExtra("request", id);
+                  q.putExtra("debug", Const.debug);
+                  q.putExtra("hint", prefs.getString("widgetHint", ""));
+                  app.sendBroadcast(q);
+              }
+
+              private void flightMessage(boolean hide, long timeout) {
+                  launcherHidden = hide;
+                  Intent m = new Intent(Const.ACTION_FLIGHT).setPackage(Const.LAUNCHER);
+                  m.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
+                  Const.sign(app, m);
+                  m.putExtra("hide", hide);
+                  m.putExtra("timeout", timeout);
+                  m.putExtra("debug", Const.debug);
+                  app.sendBroadcast(m);
+              }
+
+              private void cancel(String why) {
+                  if (pendingStart != null) {
+                      main.removeCallbacks(pendingStart);
+                      pendingStart = null;
+                  }
+                  if (overlay != null) {
+                      Const.debug("iptal: " + why);
+                      overlay.remove();
+                  }
+                  finish();
+              }
+
+              /** Her çıkış yolunda çalışır: gizlenen hiçbir şey gizli kalmaz. */
+              private void finish() {
+                  main.removeCallbacks(watchdog);
+                  Const.setHidden(hiddenClock, false);
+                  hiddenClock = null;
+                  pendingClock = null;
+                  flightSource = null;
+                  overlay = null;
+                  visible = false;
+                  if (launcherHidden) {
+                      flightMessage(false, 0);
+                  }
+              }
+
+              private boolean animationsDisabled() {
+                  return Settings.Global.getFloat(app.getContentResolver(),
+                          Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f;
+              }
+
+              @SuppressWarnings("deprecation")
+              private String topPackage() {
+                  try {
+                      ActivityManager am = (ActivityManager) app.getSystemService(Context.ACTIVITY_SERVICE);
+                      List<ActivityManager.RunningTaskInfo> tasks = am.getRunningTasks(1);
+                      if (tasks != null && !tasks.isEmpty()) {
+                          ComponentName c = tasks.get(0).topActivity;
+                          return c == null ? null : c.getPackageName();
+                      }
+                  } catch (Throwable t) {
+                      Const.debug("üstteki uygulama okunamadı: " + t);
+                  }
+                  return null;
+              }
+
+              private String homePackage() {
+                  ResolveInfo r = app.getPackageManager().resolveActivity(
+                          new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
+                          PackageManager.MATCH_DEFAULT_ONLY);
+                  return r == null || r.activityInfo == null ? null : r.activityInfo.packageName;
+              }
+          }
+          FC_EOF
+
+      - name: "Kaynak - LauncherAgent.java"
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "project/src/com/fluxclock/transition"
+          cat > 'project/src/com/fluxclock/transition/LauncherAgent.java' <<'FC_EOF'
+          package com.fluxclock.transition;
+
+          import android.app.Activity;
+          import android.app.Application;
+          import android.appwidget.AppWidgetHostView;
+          import android.appwidget.AppWidgetProviderInfo;
+          import android.content.BroadcastReceiver;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.IntentFilter;
+          import android.graphics.Bitmap;
+          import android.graphics.RectF;
+          import android.os.Bundle;
+          import android.os.Handler;
+          import android.os.HandlerThread;
+          import android.os.Looper;
+          import android.util.DisplayMetrics;
+          import android.view.View;
+          import android.view.ViewGroup;
+          import android.view.ViewParent;
+          import android.view.ViewTreeObserver;
+
+          import java.io.ByteArrayOutputStream;
+          import java.lang.ref.WeakReference;
+          import java.util.Locale;
+
+          /**
+           * Ana ekran tarafı: saat widget'ını bulur, konumunu/görüntüsünü SystemUI'ye bildirir ve
+           * uçuş süresince widget'ı gizler. Sürekli yoklama yapmaz; yalnızca olaylarla çalışır.
+           */
+          final class LauncherAgent implements Application.ActivityLifecycleCallbacks {
+
+              private static final int MAX_PNG_BYTES = 350 * 1024;
+
+              private final Application app;
+              private final Handler main = new Handler(Looper.getMainLooper());
+              private final Handler io;
+              private WeakReference<Activity> home = new WeakReference<Activity>(null);
+              private WeakReference<View> widget = new WeakReference<View>(null);
+              private WeakReference<View> observed = new WeakReference<View>(null);
+              private View hidden;
+              private String hint = "";
+
+              private final Runnable publish = new Runnable() {
+                  @Override
+                  public void run() {
+                      try {
+                          Activity a = home.get();
+                          // Kendiliğinden bildirim yalnızca ana ekran dururken yapılır.
+                          if (a != null && a.hasWindowFocus() && hidden == null) {
+                              report(0);
+                          }
+                      } catch (Throwable t) {
+                          Const.error("launcher publish", t);
+                      }
+                  }
+              };
+
+              private final Runnable restore = new Runnable() {
+                  @Override
+                  public void run() {
+                      Const.setHidden(hidden, false);
+                      hidden = null;
+                  }
+              };
+
+              private final ViewTreeObserver.OnScrollChangedListener onScroll =
+                      new ViewTreeObserver.OnScrollChangedListener() {
+                          @Override
+                          public void onScrollChanged() {
+                              schedule(450);
+                          }
+                      };
+
+              private final ViewTreeObserver.OnWindowFocusChangeListener onFocus =
+                      new ViewTreeObserver.OnWindowFocusChangeListener() {
+                          @Override
+                          public void onWindowFocusChanged(boolean focus) {
+                              if (focus) {
+                                  schedule(700);
+                              }
+                          }
+                      };
+
+              LauncherAgent(Application app) {
+                  this.app = app;
+                  HandlerThread thread = new HandlerThread("fluxclock-io");
+                  thread.start();
+                  io = new Handler(thread.getLooper());
+              }
+
+              void install() throws Exception {
+                  app.registerActivityLifecycleCallbacks(this);
+                  IntentFilter f = new IntentFilter(Const.ACTION_QUERY);
+                  f.addAction(Const.ACTION_FLIGHT);
+                  Const.register(app, new BroadcastReceiver() {
+                      @Override
+                      public void onReceive(Context c, Intent i) {
+                          try {
+                              if (!Const.from(i, Const.SYSTEMUI)) {
+                                  return;
+                              }
+                              Const.debug = i.getBooleanExtra("debug", false);
+                              if (Const.ACTION_QUERY.equals(i.getAction())) {
+                                  String h = i.getStringExtra("hint");
+                                  hint = h == null ? "" : h.trim().toLowerCase(Locale.ROOT);
+                                  report(i.getLongExtra("request", 0));
+                              } else if (i.getBooleanExtra("hide", false)) {
+                                  hideWidget(Math.min(3000L, i.getLongExtra("timeout", 1500L)));
+                              } else {
+                                  main.removeCallbacks(restore);
+                                  restore.run();
+                              }
+                          } catch (Throwable t) {
+                              Const.error("launcher receiver", t);
+                          }
+                      }
+                  }, f, main);
+              }
+
+              private void schedule(long delay) {
+                  main.removeCallbacks(publish);
+                  main.postDelayed(publish, delay);
+              }
+
+              private void hideWidget(long timeout) {
+                  main.removeCallbacks(restore);
+                  restore.run();
+                  hidden = widget.get();
+                  Const.setHidden(hidden, true);
+                  // Güvenlik: geri getirme mesajı kaybolsa bile widget görünmez kalmaz.
+                  main.postDelayed(restore, timeout);
+              }
+
+              private void report(long request) {
+                  Activity a = home.get();
+                  final Intent out = new Intent(Const.ACTION_TARGET).setPackage(Const.SYSTEMUI);
+                  Const.sign(app, out);
+                  out.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
+                  out.putExtra("request", request);
+                  DisplayMetrics dm = new DisplayMetrics();
+                  Snapshot snap = null;
+                  if (a != null && a.getWindow() != null) {
+                      a.getWindowManager().getDefaultDisplay().getRealMetrics(dm);
+                      View decor = a.getWindow().getDecorView();
+                      View best = findWidget(decor, dm);
+                      widget = new WeakReference<View>(best);
+                      if (best != null) {
+                          RectF r = Snapshot.layoutRect(best);
+                          snap = Snapshot.of(best, r);
+                          out.putExtra("found", true);
+                          RectF target = snap != null ? snap.rect : r;
+                          out.putExtra("rect", new float[]{
+                                  target.left, target.top, target.right, target.bottom});
+                      }
+                  }
+                  out.putExtra("screenW", dm.widthPixels);
+                  final Bitmap bitmap = snap == null ? null : snap.bitmap;
+                  // PNG sıkıştırma arka planda; ana ekranın kare süresini etkilemez.
+                  io.post(new Runnable() {
+                      @Override
+                      public void run() {
+                          try {
+                              if (bitmap != null) {
+                                  byte[] png = encode(bitmap);
+                                  if (png != null) {
+                                      out.putExtra("png", png);
+                                  }
+                              }
+                              app.sendBroadcast(out);
+                          } catch (Throwable t) {
+                              Const.error("hedef gönderilemedi", t);
+                          }
+                      }
+                  });
+              }
+
+              private static byte[] encode(Bitmap b) {
+                  Bitmap cur = b;
+                  for (int attempt = 0; attempt < 3; attempt++) {
+                      ByteArrayOutputStream os = new ByteArrayOutputStream();
+                      cur.compress(Bitmap.CompressFormat.PNG, 100, os);
+                      if (os.size() <= MAX_PNG_BYTES) {
+                          return os.toByteArray();
+                      }
+                      cur = Bitmap.createScaledBitmap(cur, Math.max(1, cur.getWidth() * 2 / 3),
+                              Math.max(1, cur.getHeight() * 2 / 3), true);
+                  }
+                  return null;
+              }
+
+              private static final class Best {
+                  View view;
+                  int score;
+                  float area;
+              }
+
+              private View findWidget(View root, DisplayMetrics dm) {
+                  Best best = new Best();
+                  walk(root, dm, best, 0);
+                  return best.view;
+              }
+
+              private void walk(View v, DisplayMetrics dm, Best best, int depth) {
+                  if (v.getVisibility() != View.VISIBLE && depth > 0) {
+                      return;
+                  }
+                  int score = score(v, dm);
+                  if (score > 0 && v.getWidth() >= dm.widthPixels * 0.2f
+                          && v.getHeight() >= dm.heightPixels * 0.035f && attachedAndShown(v)) {
+                      RectF r = Snapshot.layoutRect(v);
+                      float cx = r.centerX();
+                      float cy = r.centerY();
+                      // Yalnızca şu anki sayfadaki widget (diğer sayfalar ekran dışında kalır).
+                      if (cx > 0 && cx < dm.widthPixels && cy > 0 && cy < dm.heightPixels) {
+                          float area = r.width() * r.height();
+                          if (score > best.score || (score == best.score && area > best.area)) {
+                              best.view = v;
+                              best.score = score;
+                              best.area = area;
+                          }
+                      }
+                  }
+                  if (v instanceof ViewGroup) {
+                      ViewGroup g = (ViewGroup) v;
+                      for (int i = 0; i < g.getChildCount(); i++) {
+                          walk(g.getChildAt(i), dm, best, depth + 1);
+                      }
+                  }
+              }
+
+              private static boolean attachedAndShown(View v) {
+                  ViewParent p = v.getParent();
+                  while (p instanceof View) {
+                      View pv = (View) p;
+                      // Kök (decor) kilit sırasında INVISIBLE olabilir; onu saymıyoruz.
+                      if (pv.getParent() instanceof View && pv.getVisibility() != View.VISIBLE) {
+                          return false;
+                      }
+                      p = pv.getParent();
+                  }
+                  return v.getWindowToken() != null;
+              }
+
+              private int score(View v, DisplayMetrics dm) {
+                  String name = v.getClass().getName().toLowerCase(Locale.ROOT);
+                  boolean isWidget = v instanceof AppWidgetHostView;
+                  if (isWidget) {
+                      AppWidgetProviderInfo info = ((AppWidgetHostView) v).getAppWidgetInfo();
+                      if (info != null && info.provider != null) {
+                          name = info.provider.flattenToString().toLowerCase(Locale.ROOT);
+                          Const.debug("widget: " + info.provider.flattenToString()
+                                  + " " + Snapshot.layoutRect(v));
+                      }
+                  }
+                  if (hint.length() > 0) {
+                      return name.contains(hint) ? 100 : 0;
+                  }
+                  if (name.contains("flux") && name.contains("clock")) {
+                      return 90;
+                  }
+                  if (name.contains("clock")) {
+                      // Widget dışı "clock" görünümleri yalnızca son çare.
+                      return isWidget ? 60 : 10;
+                  }
+                  return 0;
+              }
+
+              @Override
+              public void onActivityResumed(Activity a) {
+                  try {
+                      // com.android.launcher.Launcher (sondaki ad kontrolü ayar ekranlarını eler)
+                      if (!a.getClass().getName().endsWith(".Launcher")) {
+                          return;
+                      }
+                      home = new WeakReference<Activity>(a);
+                      View decor = a.getWindow().getDecorView();
+                      if (observed.get() != decor) {
+                          observed = new WeakReference<View>(decor);
+                          decor.getViewTreeObserver().addOnScrollChangedListener(onScroll);
+                          decor.getViewTreeObserver().addOnWindowFocusChangeListener(onFocus);
+                      }
+                      schedule(700);
+                  } catch (Throwable t) {
+                      Const.error("onActivityResumed", t);
+                  }
+              }
+
+              @Override
+              public void onActivityDestroyed(Activity a) {
+                  if (home.get() == a) {
+                      home.clear();
+                  }
+              }
+
+              @Override
+              public void onActivityCreated(Activity a, Bundle b) {
+              }
+
+              @Override
+              public void onActivityStarted(Activity a) {
+              }
+
+              @Override
+              public void onActivityPaused(Activity a) {
+              }
+
+              @Override
+              public void onActivityStopped(Activity a) {
+              }
+
+              @Override
+              public void onActivitySaveInstanceState(Activity a, Bundle b) {
+              }
+          }
+          FC_EOF
+
+      - name: "Kaynak - SettingsActivity.java"
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "project/src/com/fluxclock/transition"
+          cat > 'project/src/com/fluxclock/transition/SettingsActivity.java' <<'FC_EOF'
+          package com.fluxclock.transition;
+
+          import android.app.Activity;
+          import android.content.Context;
+          import android.content.SharedPreferences;
+          import android.os.Bundle;
+          import android.text.Editable;
+          import android.text.TextWatcher;
+          import android.view.View;
+          import android.widget.CompoundButton;
+          import android.widget.EditText;
+          import android.widget.LinearLayout;
+          import android.widget.ScrollView;
+          import android.widget.SeekBar;
+          import android.widget.Switch;
+          import android.widget.TextView;
+
+          public final class SettingsActivity extends Activity {
+
+              private SharedPreferences prefs;
+              private LinearLayout list;
+              private boolean shared = true;
+
+              @Override
+              @SuppressWarnings("deprecation")
+              protected void onCreate(Bundle state) {
+                  super.onCreate(state);
+                  try {
+                      // LSPosed, modül etkinken bu modu SystemUI tarafından okunabilir yapar.
+                      prefs = getSharedPreferences(Const.PREFS, Context.MODE_WORLD_READABLE);
+                  } catch (SecurityException e) {
+                      shared = false;
+                      prefs = getSharedPreferences(Const.PREFS, Context.MODE_PRIVATE);
+                  }
+                  list = new LinearLayout(this);
+                  list.setOrientation(LinearLayout.VERTICAL);
+                  int pad = Math.round(20 * getResources().getDisplayMetrics().density);
+                  list.setPadding(pad, pad, pad, pad);
+
+                  text(shared
+                          ? "Modül etkin görünüyor. Değişiklikler ekran bir kez kapatılınca uygulanır."
+                          : "UYARI: Modül LSPosed/Vector'de etkin değil. Ayarlar sisteme ulaşmaz.");
+                  toggle("Geçiş animasyonu açık", "enabled", true);
+                  slider("Süre (ms)", "duration", 520, 250, 1200);
+                  slider("Yay sönümü (100 = sekmesiz)", "damping", 86, 65, 100);
+                  toggle("Saat widget'ı yoksa durum çubuğuna uçur", "statusFallback", true);
+                  toggle("Hedefi elle belirle (widget aramayı kapatır)", "manual", false);
+                  slider("Elle: yatay merkez (%)", "manualX", 50, 0, 100);
+                  slider("Elle: dikey merkez (%)", "manualY", 20, 0, 100);
+                  slider("Elle: genişlik (%)", "manualW", 60, 10, 100);
+                  field("Kilit saati ipucu (boş = otomatik; sınıf veya id parçası)", "lockHint");
+                  field("Widget ipucu (boş = otomatik; paket veya sınıf parçası)", "widgetHint");
+                  toggle("Hata ayıklama günlüğü (LSPosed günlüklerinde 'FluxClock')", "debug", false);
+                  text("İlk kurulumdan sonra telefonu yeniden başlatın. Çift saat görmemek için "
+                          + "ColorOS'un kendi 'Saati senkronize et / Sync Clock' seçeneğini kapatın.");
+
+                  ScrollView scroll = new ScrollView(this);
+                  scroll.setFitsSystemWindows(true);
+                  scroll.addView(list);
+                  setContentView(scroll);
+              }
+
+              private TextView text(String value) {
+                  TextView t = new TextView(this);
+                  t.setText(value);
+                  t.setTextSize(15);
+                  t.setPadding(0, 24, 0, 8);
+                  list.addView(t);
+                  return t;
+              }
+
+              private void toggle(String label, final String key, boolean def) {
+                  Switch s = new Switch(this);
+                  s.setText(label);
+                  s.setPadding(0, 28, 0, 28);
+                  s.setChecked(prefs.getBoolean(key, def));
+                  s.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+                      @Override
+                      public void onCheckedChanged(CompoundButton b, boolean on) {
+                          prefs.edit().putBoolean(key, on).apply();
+                      }
+                  });
+                  list.addView(s);
+              }
+
+              private void slider(final String label, final String key, int def,
+                      final int min, int max) {
+                  int value = prefs.getInt(key, def);
+                  final TextView t = text(label + ": " + value);
+                  SeekBar bar = new SeekBar(this);
+                  bar.setMax(max - min);
+                  bar.setProgress(value - min);
+                  bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                      @Override
+                      public void onProgressChanged(SeekBar s, int p, boolean user) {
+                          if (user) {
+                              t.setText(label + ": " + (p + min));
+                              prefs.edit().putInt(key, p + min).apply();
+                          }
+                      }
+
+                      @Override
+                      public void onStartTrackingTouch(SeekBar s) {
+                      }
+
+                      @Override
+                      public void onStopTrackingTouch(SeekBar s) {
+                      }
+                  });
+                  list.addView(bar);
+              }
+
+              private void field(String label, final String key) {
+                  text(label);
+                  EditText e = new EditText(this);
+                  e.setSingleLine(true);
+                  e.setText(prefs.getString(key, ""));
+                  e.addTextChangedListener(new TextWatcher() {
+                      @Override
+                      public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+                      }
+
+                      @Override
+                      public void onTextChanged(CharSequence s, int a, int b, int c) {
+                      }
+
+                      @Override
+                      public void afterTextChanged(Editable s) {
+                          prefs.edit().putString(key, s.toString()).apply();
+                      }
+                  });
+                  list.addView(e);
+              }
+          }
+          FC_EOF
+
+      - name: "Derleme betigi"
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "project/."
+          cat > 'project/build.sh' <<'FC_EOF'
+          #!/usr/bin/env bash
+          # Gradle gerektirmez: aapt2 + javac + d8 + zipalign + apksigner
+          set -euo pipefail
+          : "${ANDROID_JAR:?}" "${BT:?}"
+          VERSION_CODE="${VERSION_CODE:-1}"
+          rm -rf out && mkdir -p out/stubs out/classes out/dex
+
+          "$BT/aapt2" compile --dir res -o out/res.zip
+          "$BT/aapt2" link -o out/base.apk -I "$ANDROID_JAR" --manifest AndroidManifest.xml -A assets \
+            --min-sdk-version 31 --target-sdk-version 35 \
+            --version-code "$VERSION_CODE" --version-name "1.0.$VERSION_CODE" out/res.zip
+
+          # Xposed API taslakları yalnızca derlemede kullanılır, APK'ye GİRMEZ.
+          javac -nowarn -encoding UTF-8 -source 8 -target 8 -bootclasspath "$ANDROID_JAR" \
+            -d out/stubs $(find stubs -name '*.java')
+          javac -encoding UTF-8 -source 8 -target 8 -bootclasspath "$ANDROID_JAR" \
+            -classpath out/stubs -d out/classes $(find src -name '*.java')
+          jar cf out/classes.jar -C out/classes .
+          jar cf out/stubs.jar -C out/stubs .
+
+          if [ -x "$BT/d8" ]; then
+            "$BT/d8" --release --min-api 31 --lib "$ANDROID_JAR" --classpath out/stubs.jar \
+              --output out/dex out/classes.jar
+          else
+            "$BT/dx" --dex --min-sdk-version=26 --output=out/dex/classes.dex out/classes.jar
+          fi
+
+          cp out/base.apk out/unaligned.apk
+          (cd out/dex && zip -q ../unaligned.apk classes.dex)
+          "$BT/zipalign" -f 4 out/unaligned.apk out/aligned.apk
+          "$BT/apksigner" sign --ks "$KS_FILE" --ks-pass env:KS_PASS --ks-key-alias "$KS_ALIAS" \
+            --key-pass env:KEY_PASS --out out/FluxClock.apk out/aligned.apk
+          "$BT/apksigner" verify --verbose out/FluxClock.apk
+          FC_EOF
+
+      - name: Imza anahtari
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KS="$RUNNER_TEMP/sign.jks"
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$KS"
+            PASS="$KEYSTORE_PASSWORD"; ALIAS="$KEY_ALIAS"; KPASS="$KEY_PASSWORD"
+          else
+            echo "::warning::Kalici imza anahtari yok; gecici anahtar uretiliyor."
+            PASS="$(openssl rand -hex 16)"; ALIAS=fluxclock; KPASS="$PASS"
+            echo "::add-mask::$PASS"
+            keytool -genkeypair -keystore "$KS" -storetype PKCS12 -storepass "$PASS" \
+              -keypass "$KPASS" -alias "$ALIAS" -keyalg RSA -keysize 3072 \
+              -validity 10000 -dname "CN=FluxClock"
+          fi
+          {
+            echo "KS_FILE=$KS"
+            echo "KS_PASS=$PASS"
+            echo "KS_ALIAS=$ALIAS"
+            echo "KEY_PASS=$KPASS"
+          } >> "$GITHUB_ENV"
+
+      - name: APK derle
+        shell: bash
+        working-directory: project
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+        run: bash build.sh
+
+      - name: APK yukle
+        uses: actions/upload-artifact@v6
+        with:
+          name: FluxClock-apk
+          path: project/out/FluxClock.apk
+          if-no-files-found: error
