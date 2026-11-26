@@ -1,5 +1,6 @@
 # =====================================================================
-#  Flux Saat Gecisi - ColorOS 17 LSPosed / Vector modulu
+#  Flux Saat Gecisi - ColorOS 17 tarzi saat gecisi
+#  YALNIZCA One UI 8.5+ Samsung (LSPosed / Vector, root gerekir)
 #  TEK DOSYA: tum kaynak kod bu dosyanin icindedir.
 #
 #  Kullanim:
@@ -41,9 +42,9 @@ jobs:
           SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
           SDKM="$SDK/cmdline-tools/latest/bin/sdkmanager"
           (yes || true) | "$SDKM" --licenses >/dev/null || true
-          "$SDKM" "platforms;android-35" "build-tools;35.0.0"
-          echo "ANDROID_JAR=$SDK/platforms/android-35/android.jar" >> "$GITHUB_ENV"
-          echo "BT=$SDK/build-tools/35.0.0" >> "$GITHUB_ENV"
+          "$SDKM" "platforms;android-36" "build-tools;36.0.0"
+          echo "ANDROID_JAR=$SDK/platforms/android-36/android.jar" >> "$GITHUB_ENV"
+          echo "BT=$SDK/build-tools/36.0.0" >> "$GITHUB_ENV"
 
       - name: "Kaynaklar - manifest ve API taslaklari"
         shell: bash
@@ -81,10 +82,10 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <string name="app_name">Flux Saat Geçişi</string>
-              <string name="xposed_description">Kilit ekranı saatini kilit açılırken ana ekrana akıcı bir geçişle taşır (ColorOS 17)</string>
+              <string name="xposed_description">Kilit ekranı saatini kilit açılırken ana ekrana akıcı bir geçişle taşır (ColorOS 17 tarzı; yalnızca One UI 8.5+ Samsung)</string>
               <string-array name="xposed_scope">
                   <item>com.android.systemui</item>
-                  <item>com.android.launcher</item>
+                  <item>com.sec.android.app.launcher</item>
               </string-array>
           </resources>
           FC_EOF
@@ -185,6 +186,11 @@ jobs:
                   if (!systemUi && !launcher) {
                       return;
                   }
+                  if (!OneUi.supported()) {
+                      // Hiçbir hook kurulmaz.
+                      Const.log("desteklenmeyen cihaz, modül devre dışı: " + OneUi.describe());
+                      return;
+                  }
                   // Application hazır olduğunda kurulum yap: Context ve doğru ClassLoader elimizde olur.
                   XposedBridge.hookAllMethods(Instrumentation.class, "callApplicationOnCreate",
                           new XC_MethodHook() {
@@ -213,6 +219,74 @@ jobs:
           }
           FC_EOF
 
+      - name: "Kaynak - OneUi.java"
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "project/src/com/fluxclock/transition"
+          cat > 'project/src/com/fluxclock/transition/OneUi.java' <<'FC_EOF'
+          package com.fluxclock.transition;
+
+          import android.os.Build;
+
+          import java.lang.reflect.Field;
+
+          /** Sürüm kilidi: modül yalnızca One UI 8.5 ve üstü Samsung cihazlarda çalışır. */
+          final class OneUi {
+              /** One UI 8.5 = 80500 (ana*10000 + alt*100). */
+              static final int MIN_VERSION = 80500;
+
+              private OneUi() {
+              }
+
+              static int version() {
+                  int sem = 0;
+                  String prop = "";
+                  try {
+                      // Yalnızca Samsung yazılımında bulunan gizli alan.
+                      Field f = Build.VERSION.class.getDeclaredField("SEM_PLATFORM_INT");
+                      f.setAccessible(true);
+                      sem = f.getInt(null);
+                  } catch (Throwable ignored) {
+                      sem = 0;
+                  }
+                  try {
+                      prop = (String) Class.forName("android.os.SystemProperties")
+                              .getMethod("get", String.class)
+                              .invoke(null, "ro.build.version.oneui");
+                  } catch (Throwable ignored) {
+                      prop = "";
+                  }
+                  return decode(sem, prop);
+              }
+
+              static int decode(int semPlatformInt, String property) {
+                  if (semPlatformInt >= 90000) {
+                      return semPlatformInt - 90000;
+                  }
+                  try {
+                      return property == null ? 0 : Math.max(0, Integer.parseInt(property.trim()));
+                  } catch (NumberFormatException e) {
+                      return 0;
+                  }
+              }
+
+              static boolean supported(String manufacturer, int version) {
+                  return "samsung".equalsIgnoreCase(manufacturer) && version >= MIN_VERSION;
+              }
+
+              static boolean supported() {
+                  return supported(Build.MANUFACTURER, version());
+              }
+
+              static String describe() {
+                  int v = version();
+                  return Build.MANUFACTURER + " " + Build.MODEL + ", One UI "
+                          + (v == 0 ? "algılanamadı" : (v / 10000) + "." + (v % 10000 / 100));
+              }
+          }
+          FC_EOF
+
       - name: "Kaynak - Const.java"
         shell: bash
         run: |
@@ -236,7 +310,7 @@ jobs:
           final class Const {
               static final String PKG = "com.fluxclock.transition";
               static final String SYSTEMUI = "com.android.systemui";
-              static final String LAUNCHER = "com.android.launcher";
+              static final String LAUNCHER = "com.sec.android.app.launcher"; // One UI Home
               static final String PREFS = "settings";
               static final String TAG = "FluxClock: ";
 
@@ -512,19 +586,20 @@ jobs:
           import android.util.DisplayMetrics;
           import android.view.View;
           import android.view.ViewGroup;
+          import android.view.ViewParent;
+          import android.widget.TextView;
 
           import java.lang.reflect.Field;
           import java.util.ArrayList;
+          import java.util.Calendar;
           import java.util.List;
           import java.util.Locale;
 
           /**
-           * Kilit ekranı saatini görünüm ağacında arar. Saat ayrı bir eklenti ClassLoader'ından
-           * yüklense bile çalışır, çünkü sınıfa değil canlı görünümlere bakar. Yalnızca gerektiğinde
+           * One UI kilit ekranı saatini canlı görünüm ağacında arar. Samsung'un sınıf adları
+           * doğrulanmadığı için yalnızca adlara güvenilmez: o anki saati büyük yazıyla gösteren
+           * görünüm de saat kabul edilir (tek parça veya saat/dakika ayrı). Yalnızca gerektiğinde
            * taranır; sürekli çalışan bir hook yoktur.
-           *
-           * Aday adların bir kısmı OPlus SystemUI üzerinde çalışan açık kaynak projelerde gözlenmiştir;
-           * cihazınızdaki ad farklıysa ayarlardaki "kilit saati ipucu" alanı kullanılır.
            */
           final class ClockFinder {
 
@@ -533,6 +608,24 @@ jobs:
                   int score;
                   float area;
                   RectF rect;
+              }
+
+              /** Saat ve dakikası ayrı görünümlerde olan tasarımlar için parça. */
+              private static final class Part {
+                  TextView view;
+                  boolean hour;
+                  boolean minute;
+              }
+
+              private static final class Search {
+                  DisplayMetrics dm;
+                  String hint;
+                  boolean dump;
+                  final Result best = new Result();
+                  final List<Part> parts = new ArrayList<Part>();
+                  final List<String> full = new ArrayList<String>();
+                  final List<String> hours = new ArrayList<String>();
+                  final List<String> minutes = new ArrayList<String>();
               }
 
               private ClockFinder() {
@@ -549,21 +642,66 @@ jobs:
 
               /** Şu anda ekranda gerçekten görünen en iyi saat adayı; yoksa null. */
               static Result findVisible(DisplayMetrics dm, String hint, boolean dump) {
-                  Result best = new Result();
+                  Search s = new Search();
+                  s.dm = dm;
+                  s.hint = hint.trim().toLowerCase(Locale.ROOT);
+                  s.dump = dump;
+                  fillTimes(s, System.currentTimeMillis());
                   try {
                       for (View root : windowRoots()) {
                           if (root.getWindowVisibility() == View.VISIBLE) {
-                              walk(root, 1f, dm, hint.trim().toLowerCase(Locale.ROOT), best, dump);
+                              walk(root, 1f, s);
                           }
                       }
+                      matchSplit(s);
                   } catch (Throwable t) {
                       Const.error("saat araması", t);
                   }
-                  return best.view == null ? null : best;
+                  return s.best.view == null ? null : s.best;
               }
 
-              private static void walk(View v, float alpha, DisplayMetrics dm, String hint,
-                      Result best, boolean dump) {
+              /** Şimdiki ve bir önceki dakika (dakika dönerken yarış olmasın), 12 ve 24 saat biçimi. */
+              private static void fillTimes(Search s, long now) {
+                  for (long t : new long[]{now, now - 60000L}) {
+                      Calendar c = Calendar.getInstance();
+                      c.setTimeInMillis(t);
+                      int h24 = c.get(Calendar.HOUR_OF_DAY);
+                      int h12 = h24 % 12 == 0 ? 12 : h24 % 12;
+                      String mm = two(c.get(Calendar.MINUTE));
+                      for (String h : new String[]{two(h24), String.valueOf(h24),
+                              two(h12), String.valueOf(h12)}) {
+                          s.full.add(h + mm);
+                          s.hours.add(h);
+                      }
+                      s.minutes.add(mm);
+                  }
+              }
+
+              private static String two(int v) {
+                  return v < 10 ? "0" + v : String.valueOf(v);
+              }
+
+              /** Yalnızca rakamlar ve ayraçlardan oluşan metni rakam dizisine indirger. */
+              static String digits(CharSequence text) {
+                  if (text == null || text.length() == 0 || text.length() > 12) {
+                      return "";
+                  }
+                  StringBuilder out = new StringBuilder();
+                  for (int i = 0; i < text.length(); i++) {
+                      char ch = text.charAt(i);
+                      int d = Character.digit(ch, 10);
+                      if (d >= 0) {
+                          out.append(d);
+                      } else if (!(Character.isWhitespace(ch) || ch == ':' || ch == '.'
+                              || ch == '∶' || ch == '：' || ch == '‎' || ch == '‏'
+                              || ch == ' ' || ch == ' ' || ch == ' ')) {
+                          return "";
+                      }
+                  }
+                  return out.toString();
+              }
+
+              private static void walk(View v, float alpha, Search s) {
                   if (v.getVisibility() != View.VISIBLE) {
                       return;
                   }
@@ -578,35 +716,109 @@ jobs:
                       return;
                   }
                   String id = idName(v);
-                  if (dump && (cls.contains("clock") || id.contains("clock") || id.contains("time"))) {
+                  if (s.dump && (cls.contains("clock") || id.contains("clock") || id.contains("time"))) {
                       Const.log("aday: " + v.getClass().getName() + " id=" + id
                               + " alan=" + Snapshot.visualRect(v));
                   }
-                  int score = score(cls, id, hint);
+                  int score = score(cls, id, s.hint);
                   if (score > 0) {
-                      float w = v.getWidth();
-                      float h = v.getHeight();
-                      boolean sizeOk = w >= dm.widthPixels * 0.18f && h >= dm.heightPixels * 0.035f
-                              && w * h <= dm.widthPixels * (float) dm.heightPixels * 0.6f;
-                      if (sizeOk) {
-                          RectF r = Snapshot.visualRect(v);
-                          if (r.centerX() > 0 && r.centerX() < dm.widthPixels
-                                  && r.centerY() > 0 && r.centerY() < dm.heightPixels) {
-                              float area = r.width() * r.height();
-                              if (score > best.score || (score == best.score && area > best.area)) {
-                                  best.view = v;
-                                  best.score = score;
-                                  best.area = area;
-                                  best.rect = r;
-                              }
-                          }
-                      }
+                      offer(v, score, s);
+                  }
+                  if (s.hint.length() == 0 && !excluded(cls + " " + id)) {
+                      matchText(v, s);
                   }
                   if (v instanceof ViewGroup) {
                       ViewGroup g = (ViewGroup) v;
                       for (int i = 0; i < g.getChildCount(); i++) {
-                          walk(g.getChildAt(i), alpha, dm, hint, best, dump);
+                          walk(g.getChildAt(i), alpha, s);
                       }
+                  }
+              }
+
+              private static void matchText(View v, Search s) {
+                  // Resim/özel çizim kullanan saatler metin yerine erişilebilirlik açıklaması verebilir.
+                  if (s.full.contains(digits(v.getContentDescription()))) {
+                      offer(v, 66, s);
+                  }
+                  if (!(v instanceof TextView)) {
+                      return;
+                  }
+                  TextView t = (TextView) v;
+                  if (t.getTextSize() < s.dm.heightPixels * 0.03f) {
+                      return;
+                  }
+                  String d = digits(t.getText());
+                  if (d.length() == 0) {
+                      return;
+                  }
+                  if (s.full.contains(d)) {
+                      if (s.dump) {
+                          Const.log("saat yazısı: " + v.getClass().getName() + " id=" + idName(v));
+                      }
+                      offer(v, 70, s);
+                      return;
+                  }
+                  Part p = new Part();
+                  p.view = t;
+                  p.hour = s.hours.contains(d);
+                  p.minute = s.minutes.contains(d);
+                  if (p.hour || p.minute) {
+                      s.parts.add(p);
+                  }
+              }
+
+              /** Alt alta saat/dakika: ikisini birlikte içeren en yakın üst görünümü seç. */
+              private static void matchSplit(Search s) {
+                  for (Part h : s.parts) {
+                      for (Part m : s.parts) {
+                          if (h == m || !h.hour || !m.minute) {
+                              continue;
+                          }
+                          float ratio = h.view.getTextSize() / m.view.getTextSize();
+                          if (ratio < 0.75f || ratio > 1.34f) {
+                              continue;
+                          }
+                          View common = commonParent(h.view, m.view);
+                          if (common != null) {
+                              offer(common, 68, s);
+                          }
+                      }
+                  }
+              }
+
+              private static View commonParent(View a, View b) {
+                  List<View> chain = new ArrayList<View>();
+                  for (ViewParent p = a.getParent(); p instanceof View; p = p.getParent()) {
+                      chain.add((View) p);
+                  }
+                  for (ViewParent p = b.getParent(); p instanceof View; p = p.getParent()) {
+                      if (chain.contains(p)) {
+                          return (View) p;
+                      }
+                  }
+                  return null;
+              }
+
+              private static void offer(View v, int score, Search s) {
+                  float w = v.getWidth();
+                  float h = v.getHeight();
+                  DisplayMetrics dm = s.dm;
+                  if (w < dm.widthPixels * 0.18f || h < dm.heightPixels * 0.035f
+                          || w * h > dm.widthPixels * (float) dm.heightPixels * 0.6f) {
+                      return;
+                  }
+                  RectF r = Snapshot.visualRect(v);
+                  if (r.centerX() <= 0 || r.centerX() >= dm.widthPixels
+                          || r.centerY() <= 0 || r.centerY() >= dm.heightPixels) {
+                      return;
+                  }
+                  float area = r.width() * r.height();
+                  Result best = s.best;
+                  if (score > best.score || (score == best.score && area > best.area)) {
+                      best.view = v;
+                      best.score = score;
+                      best.area = area;
+                      best.rect = r;
                   }
               }
 
@@ -623,27 +835,32 @@ jobs:
                   }
               }
 
+              private static boolean excluded(String names) {
+                  return names.contains("aod") || names.contains("status_bar")
+                          || names.contains("statusbar") || names.contains("alarm")
+                          || names.contains("chronometer") || names.contains("invisible");
+              }
+
               private static int score(String cls, String id, String hint) {
-                  if (hint.length() > 0 && (cls.contains(hint) || id.contains(hint))) {
-                      return 1000;
+                  if (hint.length() > 0) {
+                      return cls.contains(hint) || id.contains(hint) ? 1000 : 0;
                   }
                   String both = cls + " " + id;
-                  if (both.contains("aod") || both.contains("status_bar") || both.contains("statusbar")
-                          || both.contains("invisible") || both.contains("alarm")
-                          || both.contains("chronometer")) {
+                  if (excluded(both) || !both.contains("clock")) {
                       return 0;
                   }
-                  if (id.equals("visible_digital_time_view")) return 100;
-                  if (id.equals("clock_time_parent") || id.equals("clock_time_view")) return 96;
-                  if (cls.endsWith(".bigclockdigitaltimeview")) return 95;
-                  if (cls.endsWith(".clocktimeview")) return 90;
+                  // AOSP kökenli adlar
                   if (id.startsWith("lockscreen_clock_view")) return 85;
                   if (cls.endsWith(".animatableclockview")) return 80;
-                  if (cls.endsWith(".customopluskeyguardstyleclock")) return 62;
                   if (id.equals("keyguard_clock_container")) return 60;
-                  if (cls.endsWith(".clockviewroot") || cls.endsWith(".keyguardclockswitch")) return 50;
-                  if (cls.contains("keyguard") && cls.contains("clock")) return 30;
-                  return 0;
+                  if (cls.endsWith(".keyguardclockswitch")) return 55;
+                  // Samsung için genel sezgiler ("clock" içinde "lock" geçtiği için tam kelimeler aranır)
+                  if (both.contains("keyguard") || both.contains("lockscreen") || both.contains("lockstar")
+                          || both.contains("facewidget") || both.contains("pluginlock")) {
+                      return 50;
+                  }
+                  if (cls.startsWith("com.samsung.")) return 45;
+                  return 20;
               }
           }
           FC_EOF
@@ -1453,12 +1670,14 @@ jobs:
           import android.content.Context;
           import android.content.Intent;
           import android.content.IntentFilter;
+          import android.content.pm.ResolveInfo;
           import android.graphics.Bitmap;
           import android.graphics.RectF;
           import android.os.Bundle;
           import android.os.Handler;
           import android.os.HandlerThread;
           import android.os.Looper;
+          import android.os.PowerManager;
           import android.util.DisplayMetrics;
           import android.view.View;
           import android.view.ViewGroup;
@@ -1485,6 +1704,10 @@ jobs:
               private WeakReference<View> observed = new WeakReference<View>(null);
               private View hidden;
               private String hint = "";
+              /** Ana ekran dururken yapılan son güvenilir ölçüm. */
+              private WeakReference<View> restWidget = new WeakReference<View>(null);
+              private RectF restRect;
+              private int restScreenW;
 
               private final Runnable publish = new Runnable() {
                   @Override
@@ -1493,7 +1716,7 @@ jobs:
                           Activity a = home.get();
                           // Kendiliğinden bildirim yalnızca ana ekran dururken yapılır.
                           if (a != null && a.hasWindowFocus() && hidden == null) {
-                              report(0);
+                              report(0, true);
                           }
                       } catch (Throwable t) {
                           Const.error("launcher publish", t);
@@ -1548,8 +1771,13 @@ jobs:
                               Const.debug = i.getBooleanExtra("debug", false);
                               if (Const.ACTION_QUERY.equals(i.getAction())) {
                                   String h = i.getStringExtra("hint");
-                                  hint = h == null ? "" : h.trim().toLowerCase(Locale.ROOT);
-                                  report(i.getLongExtra("request", 0));
+                                  String next = h == null ? "" : h.trim().toLowerCase(Locale.ROOT);
+                                  if (!next.equals(hint)) {
+                                      hint = next;
+                                      restRect = null;
+                                  }
+                                  Activity a = home.get();
+                                  report(i.getLongExtra("request", 0), a != null && a.hasWindowFocus());
                               } else if (i.getBooleanExtra("hide", false)) {
                                   hideWidget(Math.min(3000L, i.getLongExtra("timeout", 1500L)));
                               } else {
@@ -1577,7 +1805,7 @@ jobs:
                   main.postDelayed(restore, timeout);
               }
 
-              private void report(long request) {
+              private void report(long request, boolean atRest) {
                   Activity a = home.get();
                   final Intent out = new Intent(Const.ACTION_TARGET).setPackage(Const.SYSTEMUI);
                   Const.sign(app, out);
@@ -1588,10 +1816,30 @@ jobs:
                   if (a != null && a.getWindow() != null) {
                       a.getWindowManager().getDefaultDisplay().getRealMetrics(dm);
                       View decor = a.getWindow().getDecorView();
-                      View best = findWidget(decor, dm);
+                      View remembered = restWidget.get();
+                      View best;
+                      RectF r = null;
+                      if (!atRest && restRect != null && restScreenW == dm.widthPixels
+                              && remembered != null && attachedAndShown(remembered)) {
+                          // Kilit sırasında / açılış animasyonunda dururken ölçülen konumu kullan.
+                          best = remembered;
+                          r = new RectF(restRect);
+                      } else {
+                          best = findWidget(decor, dm, atRest);
+                          if (best != null) {
+                              boolean trusted = atRest && unscaled(best);
+                              r = trusted ? Snapshot.visualRect(best) : Snapshot.layoutRect(best);
+                              if (trusted) {
+                                  restWidget = new WeakReference<View>(best);
+                                  restRect = new RectF(r);
+                                  restScreenW = dm.widthPixels;
+                              }
+                          } else if (atRest) {
+                              restRect = null;
+                          }
+                      }
                       widget = new WeakReference<View>(best);
                       if (best != null) {
-                          RectF r = Snapshot.layoutRect(best);
                           snap = Snapshot.of(best, r);
                           out.putExtra("found", true);
                           RectF target = snap != null ? snap.rect : r;
@@ -1638,10 +1886,24 @@ jobs:
                   View view;
                   int score;
                   float area;
+                  boolean atRest;
               }
 
-              private View findWidget(View root, DisplayMetrics dm) {
+              private static boolean unscaled(View v) {
+                  Object cur = v;
+                  while (cur instanceof View) {
+                      if (Math.abs(((View) cur).getScaleX() - 1f) > 0.005f
+                              || Math.abs(((View) cur).getScaleY() - 1f) > 0.005f) {
+                          return false;
+                      }
+                      cur = ((View) cur).getParent();
+                  }
+                  return true;
+              }
+
+              private View findWidget(View root, DisplayMetrics dm, boolean atRest) {
                   Best best = new Best();
+                  best.atRest = atRest;
                   walk(root, dm, best, 0);
                   return best.view;
               }
@@ -1653,7 +1915,8 @@ jobs:
                   int score = score(v, dm);
                   if (score > 0 && v.getWidth() >= dm.widthPixels * 0.2f
                           && v.getHeight() >= dm.heightPixels * 0.035f && attachedAndShown(v)) {
-                      RectF r = Snapshot.layoutRect(v);
+                      // Dururken kaydırma/translation dahil gerçek konum, aksi halde yerleşim konumu.
+                      RectF r = best.atRest ? Snapshot.visualRect(v) : Snapshot.layoutRect(v);
                       float cx = r.centerX();
                       float cy = r.centerY();
                       // Yalnızca şu anki sayfadaki widget (diğer sayfalar ekran dışında kalır).
@@ -1701,8 +1964,8 @@ jobs:
                   if (hint.length() > 0) {
                       return name.contains(hint) ? 100 : 0;
                   }
-                  if (name.contains("flux") && name.contains("clock")) {
-                      return 90;
+                  if (isWidget && name.contains("com.sec.android.app.clockpackage")) {
+                      return 80; // Samsung Saat widget'ı
                   }
                   if (name.contains("clock")) {
                       // Widget dışı "clock" görünümleri yalnızca son çare.
@@ -1714,8 +1977,7 @@ jobs:
               @Override
               public void onActivityResumed(Activity a) {
                   try {
-                      // com.android.launcher.Launcher (sondaki ad kontrolü ayar ekranlarını eler)
-                      if (!a.getClass().getName().endsWith(".Launcher")) {
+                      if (!isHome(a)) {
                           return;
                       }
                       home = new WeakReference<Activity>(a);
@@ -1729,6 +1991,22 @@ jobs:
                   } catch (Throwable t) {
                       Const.error("onActivityResumed", t);
                   }
+              }
+
+              /** Yalnızca ana ekran etkinliği; One UI Home'un ayar ekranları elenir. */
+              private boolean isHome(Activity a) {
+                  String name = a.getClass().getName();
+                  if (name.endsWith(".LauncherActivity")) {
+                      return true;
+                  }
+                  Intent i = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+                          .setPackage(app.getPackageName());
+                  for (ResolveInfo r : app.getPackageManager().queryIntentActivities(i, 0)) {
+                      if (name.equals(r.activityInfo.name) || name.equals(r.activityInfo.targetActivity)) {
+                          return true;
+                      }
+                  }
+                  return false;
               }
 
               @Override
@@ -1748,6 +2026,15 @@ jobs:
 
               @Override
               public void onActivityPaused(Activity a) {
+                  try {
+                      PowerManager pm = (PowerManager) app.getSystemService(Context.POWER_SERVICE);
+                      // Yalnızca ekran kapanırken ölç; uygulama açma animasyonuna yük bindirme.
+                      if (home.get() == a && hidden == null && !pm.isInteractive()) {
+                          report(0, true);
+                      }
+                  } catch (Throwable t) {
+                      Const.error("onActivityPaused", t);
+                  }
               }
 
               @Override
@@ -1805,6 +2092,13 @@ jobs:
                   int pad = Math.round(20 * getResources().getDisplayMetrics().density);
                   list.setPadding(pad, pad, pad, pad);
 
+                  if (!OneUi.supported()) {
+                      text("Bu modül yalnızca One UI 8.5 ve üstü Samsung cihazlarda çalışır.\n\n"
+                              + "Algılanan: " + OneUi.describe());
+                      show();
+                      return;
+                  }
+                  text("Algılanan: " + OneUi.describe());
                   text(shared
                           ? "Modül etkin görünüyor. Değişiklikler ekran bir kez kapatılınca uygulanır."
                           : "UYARI: Modül LSPosed/Vector'de etkin değil. Ayarlar sisteme ulaşmaz.");
@@ -1819,9 +2113,12 @@ jobs:
                   field("Kilit saati ipucu (boş = otomatik; sınıf veya id parçası)", "lockHint");
                   field("Widget ipucu (boş = otomatik; paket veya sınıf parçası)", "widgetHint");
                   toggle("Hata ayıklama günlüğü (LSPosed günlüklerinde 'FluxClock')", "debug", false);
-                  text("İlk kurulumdan sonra telefonu yeniden başlatın. Çift saat görmemek için "
-                          + "ColorOS'un kendi 'Saati senkronize et / Sync Clock' seçeneğini kapatın.");
+                  text("İlk kurulumdan sonra telefonu yeniden başlatın. Animasyonlar çakışırsa "
+                          + "Good Lock > LockStar kilit açma efektini kapatın.");
+                  show();
+              }
 
+              private void show() {
                   ScrollView scroll = new ScrollView(this);
                   scroll.setFitsSystemWindows(true);
                   scroll.addView(list);
@@ -1917,7 +2214,7 @@ jobs:
 
           "$BT/aapt2" compile --dir res -o out/res.zip
           "$BT/aapt2" link -o out/base.apk -I "$ANDROID_JAR" --manifest AndroidManifest.xml -A assets \
-            --min-sdk-version 31 --target-sdk-version 35 \
+            --min-sdk-version 36 --target-sdk-version 36 \
             --version-code "$VERSION_CODE" --version-name "1.0.$VERSION_CODE" out/res.zip
 
           # Xposed API taslakları yalnızca derlemede kullanılır, APK'ye GİRMEZ.
@@ -1925,62 +2222,4 @@ jobs:
             -d out/stubs $(find stubs -name '*.java')
           javac -encoding UTF-8 -source 8 -target 8 -bootclasspath "$ANDROID_JAR" \
             -classpath out/stubs -d out/classes $(find src -name '*.java')
-          jar cf out/classes.jar -C out/classes .
-          jar cf out/stubs.jar -C out/stubs .
-
-          if [ -x "$BT/d8" ]; then
-            "$BT/d8" --release --min-api 31 --lib "$ANDROID_JAR" --classpath out/stubs.jar \
-              --output out/dex out/classes.jar
-          else
-            "$BT/dx" --dex --min-sdk-version=26 --output=out/dex/classes.dex out/classes.jar
-          fi
-
-          cp out/base.apk out/unaligned.apk
-          (cd out/dex && zip -q ../unaligned.apk classes.dex)
-          "$BT/zipalign" -f 4 out/unaligned.apk out/aligned.apk
-          "$BT/apksigner" sign --ks "$KS_FILE" --ks-pass env:KS_PASS --ks-key-alias "$KS_ALIAS" \
-            --key-pass env:KEY_PASS --out out/FluxClock.apk out/aligned.apk
-          "$BT/apksigner" verify --verbose out/FluxClock.apk
-          FC_EOF
-
-      - name: Imza anahtari
-        shell: bash
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          KS="$RUNNER_TEMP/sign.jks"
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$KS"
-            PASS="$KEYSTORE_PASSWORD"; ALIAS="$KEY_ALIAS"; KPASS="$KEY_PASSWORD"
-          else
-            echo "::warning::Kalici imza anahtari yok; gecici anahtar uretiliyor."
-            PASS="$(openssl rand -hex 16)"; ALIAS=fluxclock; KPASS="$PASS"
-            echo "::add-mask::$PASS"
-            keytool -genkeypair -keystore "$KS" -storetype PKCS12 -storepass "$PASS" \
-              -keypass "$KPASS" -alias "$ALIAS" -keyalg RSA -keysize 3072 \
-              -validity 10000 -dname "CN=FluxClock"
-          fi
-          {
-            echo "KS_FILE=$KS"
-            echo "KS_PASS=$PASS"
-            echo "KS_ALIAS=$ALIAS"
-            echo "KEY_PASS=$KPASS"
-          } >> "$GITHUB_ENV"
-
-      - name: APK derle
-        shell: bash
-        working-directory: project
-        env:
-          VERSION_CODE: ${{ github.run_number }}
-        run: bash build.sh
-
-      - name: APK yukle
-        uses: actions/upload-artifact@v6
-        with:
-          name: FluxClock-apk
-          path: project/out/FluxClock.apk
-          if-no-files-found: error
+      
