@@ -1,7 +1,9 @@
 # =====================================================================
 #  Flux Saat Gecisi - ColorOS 17 tarzi saat gecisi
 #  YALNIZCA One UI 8.5+ Samsung (LSPosed / Vector, root gerekir)
-#  TEK DOSYA: tum kaynak kod bu dosyanin icindedir.
+#  TEK DOSYA: tum kaynak kod, sikistirilmis olarak dosyanin SONUNDADIR
+#  ("#P:" satirlari). Onlari silmeyin veya degistirmeyin.
+#  Dosya eksik kopyalanirsa derleme KIRMIZI olur.
 #
 #  Kullanim:
 #   1) Bu dosyanin yolu TAM OLARAK su olmali:  .github/workflows/build.yml
@@ -34,6 +36,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      - name: Depoyu al
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
       - name: JDK 17
         uses: actions/setup-java@v5
         with:
@@ -51,2175 +58,354 @@ jobs:
           echo "ANDROID_JAR=$SDK/platforms/android-36/android.jar" >> "$GITHUB_ENV"
           echo "BT=$SDK/build-tools/36.0.0" >> "$GITHUB_ENV"
 
-      - name: "Kaynaklar - manifest ve API taslaklari"
+      - name: Kaynak kodunu cikar ve butunlugunu kontrol et
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "project/."
-          cat > 'project/AndroidManifest.xml' <<'FC_EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="com.fluxclock.transition">
-              <application
-                  android:label="@string/app_name"
-                  android:icon="@android:drawable/ic_lock_idle_alarm"
-                  android:allowBackup="false">
-                  <meta-data android:name="xposedmodule" android:value="true" />
-                  <meta-data android:name="xposeddescription" android:value="@string/xposed_description" />
-                  <meta-data android:name="xposedminversion" android:value="93" />
-                  <meta-data android:name="xposedsharedprefs" android:value="true" />
-                  <meta-data android:name="xposedscope" android:resource="@array/xposed_scope" />
-                  <activity
-                      android:name=".SettingsActivity"
-                      android:exported="true"
-                      android:theme="@android:style/Theme.DeviceDefault">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                          <category android:name="de.robv.android.xposed.category.MODULE_SETTINGS" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          FC_EOF
-          mkdir -p "project/res/values"
-          cat > 'project/res/values/strings.xml' <<'FC_EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <string name="app_name">Flux Saat Geçişi</string>
-              <string name="xposed_description">Kilit ekranı saatini kilit açılırken ana ekrana akıcı bir geçişle taşır (ColorOS 17 tarzı; yalnızca One UI 8.5+ Samsung)</string>
-              <string-array name="xposed_scope">
-                  <item>com.android.systemui</item>
-                  <item>com.sec.android.app.launcher</item>
-              </string-array>
-          </resources>
-          FC_EOF
-          mkdir -p "project/assets"
-          cat > 'project/assets/xposed_init' <<'FC_EOF'
-          com.fluxclock.transition.MainHook
-          FC_EOF
-          mkdir -p "project/stubs/de/robv/android/xposed"
-          cat > 'project/stubs/de/robv/android/xposed/IXposedHookLoadPackage.java' <<'FC_EOF'
-          package de.robv.android.xposed;
-          import de.robv.android.xposed.callbacks.XC_LoadPackage;
-          public interface IXposedHookLoadPackage {
-              void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) throws Throwable;
-          }
-          FC_EOF
-          mkdir -p "project/stubs/de/robv/android/xposed"
-          cat > 'project/stubs/de/robv/android/xposed/XC_MethodHook.java' <<'FC_EOF'
-          package de.robv.android.xposed;
-          import de.robv.android.xposed.callbacks.XCallback;
-          public abstract class XC_MethodHook extends XCallback {
-              public XC_MethodHook() {}
-              protected void beforeHookedMethod(MethodHookParam param) throws Throwable {}
-              protected void afterHookedMethod(MethodHookParam param) throws Throwable {}
-              public static final class MethodHookParam extends XCallback.Param {
-                  public Object thisObject;
-                  public Object[] args;
-              }
-              public class Unhook {}
-          }
-          FC_EOF
-          mkdir -p "project/stubs/de/robv/android/xposed"
-          cat > 'project/stubs/de/robv/android/xposed/XSharedPreferences.java' <<'FC_EOF'
-          package de.robv.android.xposed;
-          public final class XSharedPreferences {
-              public XSharedPreferences(String packageName, String prefFileName) {}
-              public synchronized void reload() { throw new RuntimeException("stub"); }
-              public boolean getBoolean(String k, boolean d) { throw new RuntimeException("stub"); }
-              public int getInt(String k, int d) { throw new RuntimeException("stub"); }
-              public String getString(String k, String d) { throw new RuntimeException("stub"); }
-          }
-          FC_EOF
-          mkdir -p "project/stubs/de/robv/android/xposed"
-          cat > 'project/stubs/de/robv/android/xposed/XposedBridge.java' <<'FC_EOF'
-          package de.robv.android.xposed;
-          import java.util.Set;
-          public final class XposedBridge {
-              public static void log(String text) { throw new RuntimeException("stub"); }
-              public static void log(Throwable t) { throw new RuntimeException("stub"); }
-              public static Set<XC_MethodHook.Unhook> hookAllMethods(Class<?> c, String m, XC_MethodHook cb) {
-                  throw new RuntimeException("stub");
-              }
-          }
-          FC_EOF
-          mkdir -p "project/stubs/de/robv/android/xposed/callbacks"
-          cat > 'project/stubs/de/robv/android/xposed/callbacks/XC_LoadPackage.java' <<'FC_EOF'
-          package de.robv.android.xposed.callbacks;
-          public abstract class XC_LoadPackage extends XCallback {
-              public static final class LoadPackageParam extends XCallback.Param {
-                  public String packageName;
-                  public String processName;
-                  public ClassLoader classLoader;
-              }
-          }
-          FC_EOF
-          mkdir -p "project/stubs/de/robv/android/xposed/callbacks"
-          cat > 'project/stubs/de/robv/android/xposed/callbacks/XCallback.java' <<'FC_EOF'
-          package de.robv.android.xposed.callbacks;
-          public abstract class XCallback {
-              public static abstract class Param {}
-          }
-          FC_EOF
+          WF="${GITHUB_WORKFLOW_REF#"$GITHUB_REPOSITORY"/}"
+          WF="${WF%@*}"
+          sed -n 's/^#P://p' "$WF" | tr -d ' \r\n' > "$RUNNER_TEMP/src.b64"
+          if ! echo "71284d725f76b6f29b629c53c70768c32bf8e426609a0d045def6766b93ac8d0  $RUNNER_TEMP/src.b64" | sha256sum -c --status; then
+            echo "::error::build.yml eksik veya bozuk kopyalanmis. Dosyayi kopyala-yapistir yerine 'Upload files' ile yukleyin."
+            exit 1
+          fi
+          rm -rf project dist
+          mkdir -p project
+          base64 -d "$RUNNER_TEMP/src.b64" | tar -xJf - -C project
+          find project -type f | sort
 
-      - name: "Kaynak - MainHook.java"
+      - name: Imza anahtari
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KS="$RUNNER_TEMP/sign.jks"
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$KS"
+            PASS="$KEYSTORE_PASSWORD"; ALIAS="$KEY_ALIAS"; KPASS="$KEY_PASSWORD"
+          else
+            echo "::warning::Kalici imza anahtari yok; gecici anahtar uretiliyor."
+            PASS="$(openssl rand -hex 16)"; ALIAS=fluxclock; KPASS="$PASS"
+            echo "::add-mask::$PASS"
+            keytool -genkeypair -keystore "$KS" -storetype PKCS12 -storepass "$PASS" \
+              -keypass "$KPASS" -alias "$ALIAS" -keyalg RSA -keysize 3072 \
+              -validity 10000 -dname "CN=FluxClock"
+          fi
+          {
+            echo "KS_FILE=$KS"
+            echo "KS_PASS=$PASS"
+            echo "KS_ALIAS=$ALIAS"
+            echo "KEY_PASS=$KPASS"
+          } >> "$GITHUB_ENV"
+
+      - name: APK derle
+        shell: bash
+        working-directory: project
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+        run: bash build.sh
+
+      - name: APK dogrula
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "project/src/com/fluxclock/transition"
-          cat > 'project/src/com/fluxclock/transition/MainHook.java' <<'FC_EOF'
-          package com.fluxclock.transition;
+          APK=project/out/FluxClock.apk
+          test -s "$APK" || { echo "::error::APK olusmadi"; exit 1; }
+          "$BT/apksigner" verify "$APK"
+          "$BT/aapt2" dump badging "$APK" > "$RUNNER_TEMP/badging.txt"
+          grep -q "^package: name='com.fluxclock.transition'" "$RUNNER_TEMP/badging.txt"
+          unzip -Z1 "$APK" > "$RUNNER_TEMP/files.txt"
+          for f in AndroidManifest.xml classes.dex assets/xposed_init; do
+            grep -qx "$f" "$RUNNER_TEMP/files.txt" || { echo "::error::APK icinde eksik: $f"; exit 1; }
+          done
+          NAME="FluxClock-v${GITHUB_RUN_NUMBER}.apk"
+          mkdir -p dist
+          cp "$APK" "dist/$NAME"
+          echo "APK_NAME=$NAME" >> "$GITHUB_ENV"
+          ls -l dist
+          sha256sum "dist/$NAME"
 
-          import android.app.Application;
-          import android.app.Instrumentation;
+      - name: APK yukle (Artifacts)
+        id: artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: FluxClock-apk
+          path: dist/*.apk
+          if-no-files-found: error
 
-          import de.robv.android.xposed.IXposedHookLoadPackage;
-          import de.robv.android.xposed.XC_MethodHook;
-          import de.robv.android.xposed.XposedBridge;
-          import de.robv.android.xposed.callbacks.XC_LoadPackage;
-
-          /** Modül giriş noktası (klasik Xposed API: LSPosed ve Vector destekler). */
-          public final class MainHook implements IXposedHookLoadPackage {
-
-              private static boolean installed;
-
-              @Override
-              public void handleLoadPackage(final XC_LoadPackage.LoadPackageParam lp) throws Throwable {
-                  final boolean systemUi = Const.SYSTEMUI.equals(lp.packageName);
-                  final boolean launcher = Const.LAUNCHER.equals(lp.packageName);
-                  if (!systemUi && !launcher) {
-                      return;
-                  }
-                  if (!OneUi.supported()) {
-                      // Hiçbir hook kurulmaz.
-                      Const.log("desteklenmeyen cihaz, modül devre dışı: " + OneUi.describe());
-                      return;
-                  }
-                  // Application hazır olduğunda kurulum yap: Context ve doğru ClassLoader elimizde olur.
-                  XposedBridge.hookAllMethods(Instrumentation.class, "callApplicationOnCreate",
-                          new XC_MethodHook() {
-                              @Override
-                              protected void afterHookedMethod(MethodHookParam param) {
-                                  try {
-                                      Application app = (Application) param.args[0];
-                                      synchronized (MainHook.class) {
-                                          if (installed || !lp.packageName.equals(app.getPackageName())) {
-                                              return;
-                                          }
-                                          installed = true;
-                                      }
-                                      if (systemUi) {
-                                          new SystemUiController(app).install(app.getClassLoader());
-                                      } else {
-                                          new LauncherAgent(app).install();
-                                      }
-                                      Const.log("kuruldu: " + lp.processName);
-                                  } catch (Throwable t) {
-                                      Const.error("kurulum hatası", t);
-                                  }
-                              }
-                          });
-              }
-          }
-          FC_EOF
-
-      - name: "Kaynak - OneUi.java"
+      - name: Ozet - Artifacts baglantisi
         shell: bash
+        env:
+          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
+        run: |
+          {
+            echo "## APK olustu ve dogrulandi: $APK_NAME"
+            echo ""
+            echo "- [Zip olarak indir (Artifacts)]($ARTIFACT_URL)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: APK'yi Releases bolumune koy
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          mkdir -p "project/src/com/fluxclock/transition"
-          cat > 'project/src/com/fluxclock/transition/OneUi.java' <<'FC_EOF'
-          package com.fluxclock.transition;
-
-          import android.os.Build;
-
-          import java.lang.reflect.Field;
-
-          /** Sürüm kilidi: modül yalnızca One UI 8.5 ve üstü Samsung cihazlarda çalışır. */
-          final class OneUi {
-              /** One UI 8.5 = 80500 (ana*10000 + alt*100). */
-              static final int MIN_VERSION = 80500;
-
-              private OneUi() {
-              }
-
-              static int version() {
-                  int sem = 0;
-                  String prop = "";
-                  try {
-                      // Yalnızca Samsung yazılımında bulunan gizli alan.
-                      Field f = Build.VERSION.class.getDeclaredField("SEM_PLATFORM_INT");
-                      f.setAccessible(true);
-                      sem = f.getInt(null);
-                  } catch (Throwable ignored) {
-                      sem = 0;
-                  }
-                  try {
-                      prop = (String) Class.forName("android.os.SystemProperties")
-                              .getMethod("get", String.class)
-                              .invoke(null, "ro.build.version.oneui");
-                  } catch (Throwable ignored) {
-                      prop = "";
-                  }
-                  return decode(sem, prop);
-              }
-
-              static int decode(int semPlatformInt, String property) {
-                  if (semPlatformInt >= 90000) {
-                      return semPlatformInt - 90000;
-                  }
-                  try {
-                      return property == null ? 0 : Math.max(0, Integer.parseInt(property.trim()));
-                  } catch (NumberFormatException e) {
-                      return 0;
-                  }
-              }
-
-              static boolean supported(String manufacturer, int version) {
-                  return "samsung".equalsIgnoreCase(manufacturer) && version >= MIN_VERSION;
-              }
-
-              static boolean supported() {
-                  return supported(Build.MANUFACTURER, version());
-              }
-
-              static String describe() {
-                  int v = version();
-                  return Build.MANUFACTURER + " " + Build.MODEL + ", One UI "
-                          + (v == 0 ? "algılanamadı" : (v / 10000) + "." + (v % 10000 / 100));
-              }
+          TAG="fluxclock-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          publish() {
+            gh release create "$TAG" "dist/$APK_NAME" --repo "$GITHUB_REPOSITORY"               --title "FluxClock APK (derleme $GITHUB_RUN_NUMBER)"               --notes "Yalnizca One UI 8.5+ Samsung. Root ve LSPosed/Vector gerekir. Dosya: $APK_NAME"               --latest "$@"
           }
-          FC_EOF
-
-      - name: "Kaynak - Const.java"
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "project/src/com/fluxclock/transition"
-          cat > 'project/src/com/fluxclock/transition/Const.java' <<'FC_EOF'
-          package com.fluxclock.transition;
-
-          import android.app.PendingIntent;
-          import android.content.BroadcastReceiver;
-          import android.content.Context;
-          import android.content.Intent;
-          import android.content.IntentFilter;
-          import android.os.Handler;
-          import android.view.View;
-
-          import java.lang.reflect.Method;
-
-          import de.robv.android.xposed.XposedBridge;
-
-          final class Const {
-              static final String PKG = "com.fluxclock.transition";
-              static final String SYSTEMUI = "com.android.systemui";
-              static final String LAUNCHER = "com.sec.android.app.launcher"; // One UI Home
-              static final String PREFS = "settings";
-              static final String TAG = "FluxClock: ";
-
-              /** SystemUI -> Launcher: "saat widget'ı nerede?" */
-              static final String ACTION_QUERY = PKG + ".QUERY";
-              /** Launcher -> SystemUI: widget konumu ve görüntüsü */
-              static final String ACTION_TARGET = PKG + ".TARGET";
-              /** SystemUI -> Launcher: uçuş sırasında widget'ı gizle / geri getir */
-              static final String ACTION_FLIGHT = PKG + ".FLIGHT";
-
-              static volatile boolean debug;
-
-              private static final int FLAG_IMMUTABLE = 0x04000000;
-              private static final int RECEIVER_EXPORTED = 0x2;
-
-              private Const() {
-              }
-
-              static void log(String msg) {
-                  XposedBridge.log(TAG + msg);
-              }
-
-              static void debug(String msg) {
-                  if (debug) {
-                      log(msg);
-                  }
-              }
-
-              static void error(String msg, Throwable t) {
-                  XposedBridge.log(TAG + msg);
-                  XposedBridge.log(t);
-              }
-
-              /** Gönderenin kimliğini kanıtlayan etiket (sistem tarafından doldurulur, taklit edilemez). */
-              static void sign(Context c, Intent i) {
-                  PendingIntent id = PendingIntent.getBroadcast(c, 0,
-                          new Intent(PKG + ".ID").setPackage(c.getPackageName()), FLAG_IMMUTABLE);
-                  i.putExtra("auth", id);
-              }
-
-              static boolean from(Intent i, String expectedPackage) {
-                  Object p = i.getParcelableExtra("auth");
-                  return p instanceof PendingIntent
-                          && expectedPackage.equals(((PendingIntent) p).getCreatorPackage());
-              }
-
-              static void register(Context c, BroadcastReceiver r, IntentFilter f, Handler h)
-                      throws Exception {
-                  Method m = Context.class.getMethod("registerReceiver", BroadcastReceiver.class,
-                          IntentFilter.class, String.class, Handler.class, int.class);
-                  m.invoke(c, r, f, null, h, RECEIVER_EXPORTED);
-              }
-
-              /**
-               * transitionAlpha, sistemin kendi setAlpha() animasyonlarıyla çakışmadan
-               * bir görünümü gizlememizi sağlar.
-               */
-              static void setHidden(View v, boolean hidden) {
-                  if (v == null) {
-                      return;
-                  }
-                  try {
-                      View.class.getMethod("setTransitionAlpha", float.class)
-                              .invoke(v, hidden ? 0f : 1f);
-                  } catch (Throwable t) {
-                      error("setTransitionAlpha kullanılamadı", t);
-                  }
-              }
-          }
-          FC_EOF
-
-      - name: "Kaynak - Snapshot.java"
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "project/src/com/fluxclock/transition"
-          cat > 'project/src/com/fluxclock/transition/Snapshot.java' <<'FC_EOF'
-          package com.fluxclock.transition;
-
-          import android.graphics.Bitmap;
-          import android.graphics.Canvas;
-          import android.graphics.Paint;
-          import android.graphics.Rect;
-          import android.graphics.RectF;
-          import android.graphics.Typeface;
-          import android.view.View;
-          import android.view.ViewParent;
-
-          import java.text.SimpleDateFormat;
-          import java.util.Date;
-          import java.util.Locale;
-
-          /** Bir görünümün görüntüsü + ekrandaki gerçek içerik dikdörtgeni. */
-          final class Snapshot {
-              final Bitmap bitmap;
-              final RectF rect;
-
-              Snapshot(Bitmap bitmap, RectF rect) {
-                  this.bitmap = bitmap;
-                  this.rect = rect;
-              }
-
-              /**
-               * Görünümü çizer ve saydam kenarları kırpar; böylece rakamlar rakamların üstüne oturur.
-               *
-               * @param viewOnScreen görünümün tamamının ekrandaki dikdörtgeni
-               * @return çizilemezse veya boşsa null
-               */
-              static Snapshot of(View v, RectF viewOnScreen) {
-                  int w = v.getWidth();
-                  int h = v.getHeight();
-                  if (w <= 0 || h <= 0 || (long) w * h > 8000000L) {
-                      return null;
-                  }
-                  try {
-                      Bitmap full = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-                      Canvas canvas = new Canvas(full);
-                      canvas.translate(-v.getScrollX(), -v.getScrollY());
-                      v.draw(canvas);
-                      Rect crop = opaqueBounds(full);
-                      if (crop == null) {
-                          return null;
-                      }
-                      Bitmap cut = Bitmap.createBitmap(full, crop.left, crop.top,
-                              crop.width(), crop.height());
-                      float sx = viewOnScreen.width() / w;
-                      float sy = viewOnScreen.height() / h;
-                      RectF r = new RectF(
-                              viewOnScreen.left + crop.left * sx,
-                              viewOnScreen.top + crop.top * sy,
-                              viewOnScreen.left + crop.right * sx,
-                              viewOnScreen.top + crop.bottom * sy);
-                      return new Snapshot(cut, r);
-                  } catch (Throwable t) {
-                      // Donanım bitmap'i / özel shader içeren görünümler yazılım tuvaline çizilemeyebilir.
-                      Const.debug("görüntü alınamadı " + v.getClass().getName() + ": " + t);
-                      return null;
-                  }
-              }
-
-              private static Rect opaqueBounds(Bitmap b) {
-                  int w = b.getWidth();
-                  int h = b.getHeight();
-                  int[] row = new int[w];
-                  int left = w, top = h, right = -1, bottom = -1;
-                  for (int y = 0; y < h; y++) {
-                      b.getPixels(row, 0, w, 0, y, w, 1);
-                      for (int x = 0; x < w; x++) {
-                          if ((row[x] >>> 24) > 24) {
-                              if (x < left) left = x;
-                              if (x > right) right = x;
-                              if (y < top) top = y;
-                              bottom = y;
-                          }
-                      }
-                  }
-                  if (right < left || bottom < top || right - left < 4 || bottom - top < 4) {
-                      return null;
-                  }
-                  return new Rect(left, top, right + 1, bottom + 1);
-              }
-
-              /** Sistem saati yazılım tuvaline çizilemezse kullanılan sade yedek. */
-              static Snapshot text(RectF where, boolean is24h) {
-                  int w = Math.max(8, Math.round(where.width()));
-                  int h = Math.max(8, Math.round(where.height()));
-                  String time = new SimpleDateFormat(is24h ? "HH:mm" : "h:mm", Locale.getDefault())
-                          .format(new Date());
-                  Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-                  p.setColor(0xFFFFFFFF);
-                  p.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-                  p.setTextSize(h);
-                  Rect bounds = new Rect();
-                  p.getTextBounds(time, 0, time.length(), bounds);
-                  float scale = Math.min((float) w / bounds.width(), (float) h / bounds.height());
-                  p.setTextSize(h * scale * 0.96f);
-                  p.getTextBounds(time, 0, time.length(), bounds);
-                  Bitmap b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-                  new Canvas(b).drawText(time, (w - bounds.width()) / 2f - bounds.left,
-                          (h - bounds.height()) / 2f - bounds.top, p);
-                  return new Snapshot(b, new RectF(where));
-              }
-
-              /** Ölçek ve kaydırma dahil, görünümün şu an ekranda kapladığı alan. */
-              static RectF visualRect(View v) {
-                  int[] loc = new int[2];
-                  v.getLocationOnScreen(loc);
-                  float sx = 1f, sy = 1f;
-                  Object cur = v;
-                  while (cur instanceof View) {
-                      sx *= ((View) cur).getScaleX();
-                      sy *= ((View) cur).getScaleY();
-                      cur = ((View) cur).getParent();
-                  }
-                  return new RectF(loc[0], loc[1],
-                          loc[0] + v.getWidth() * sx, loc[1] + v.getHeight() * sy);
-              }
-
-              /**
-               * Animasyonlardan etkilenmeyen "yerleşim" dikdörtgeni. Launcher kilit açılırken
-               * kendi ölçek animasyonunu oynatsa bile doğru hedefi verir.
-               */
-              static RectF layoutRect(View v) {
-                  float x = 0, y = 0;
-                  View cur = v;
-                  ViewParent parent = cur.getParent();
-                  while (parent instanceof View) {
-                      View p = (View) parent;
-                      x += cur.getLeft() - p.getScrollX();
-                      y += cur.getTop() - p.getScrollY();
-                      cur = p;
-                      parent = cur.getParent();
-                  }
-                  int[] root = new int[2];
-                  cur.getLocationOnScreen(root);
-                  x += root[0];
-                  y += root[1];
-                  return new RectF(x, y, x + v.getWidth(), y + v.getHeight());
-              }
-          }
-          FC_EOF
-
-      - name: "Kaynak - Spring.java"
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "project/src/com/fluxclock/transition"
-          cat > 'project/src/com/fluxclock/transition/Spring.java' <<'FC_EOF'
-          package com.fluxclock.transition;
-
-          import android.animation.TimeInterpolator;
-
-          /** Sönümlü yay eğrisi. damping=1 sekmesiz, küçüldükçe daha "zıplak". */
-          final class Spring implements TimeInterpolator {
-              private final double zeta;
-              private final double omega;
-              private final double end;
-
-              Spring(float damping) {
-                  zeta = Math.max(0.6, Math.min(1.0, damping));
-                  omega = 8.0 / zeta;
-                  end = raw(1.0);
-              }
-
-              private double raw(double t) {
-                  double decay = Math.exp(-zeta * omega * t);
-                  if (zeta >= 0.999) {
-                      return 1.0 - decay * (1.0 + omega * t);
-                  }
-                  double wd = omega * Math.sqrt(1.0 - zeta * zeta);
-                  return 1.0 - decay * (Math.cos(wd * t) + zeta * omega / wd * Math.sin(wd * t));
-              }
-
-              @Override
-              public float getInterpolation(float t) {
-                  if (t >= 1f) {
-                      return 1f;
-                  }
-                  return (float) (raw(t) / end);
-              }
-          }
-          FC_EOF
-
-      - name: "Kaynak - ClockFinder.java"
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "project/src/com/fluxclock/transition"
-          cat > 'project/src/com/fluxclock/transition/ClockFinder.java' <<'FC_EOF'
-          package com.fluxclock.transition;
-
-          import android.graphics.RectF;
-          import android.util.DisplayMetrics;
-          import android.view.View;
-          import android.view.ViewGroup;
-          import android.view.ViewParent;
-          import android.widget.TextView;
-
-          import java.lang.reflect.Field;
-          import java.util.ArrayList;
-          import java.util.Calendar;
-          import java.util.List;
-          import java.util.Locale;
-
-          /**
-           * One UI kilit ekranı saatini canlı görünüm ağacında arar. Samsung'un sınıf adları
-           * doğrulanmadığı için yalnızca adlara güvenilmez: o anki saati büyük yazıyla gösteren
-           * görünüm de saat kabul edilir (tek parça veya saat/dakika ayrı). Yalnızca gerektiğinde
-           * taranır; sürekli çalışan bir hook yoktur.
-           */
-          final class ClockFinder {
-
-              static final class Result {
-                  View view;
-                  int score;
-                  float area;
-                  RectF rect;
-              }
-
-              /** Saat ve dakikası ayrı görünümlerde olan tasarımlar için parça. */
-              private static final class Part {
-                  TextView view;
-                  boolean hour;
-                  boolean minute;
-              }
-
-              private static final class Search {
-                  DisplayMetrics dm;
-                  String hint;
-                  boolean dump;
-                  final Result best = new Result();
-                  final List<Part> parts = new ArrayList<Part>();
-                  final List<String> full = new ArrayList<String>();
-                  final List<String> hours = new ArrayList<String>();
-                  final List<String> minutes = new ArrayList<String>();
-              }
-
-              private ClockFinder() {
-              }
-
-              @SuppressWarnings("unchecked")
-              private static List<View> windowRoots() throws Exception {
-                  Class<?> c = Class.forName("android.view.WindowManagerGlobal");
-                  Object global = c.getMethod("getInstance").invoke(null);
-                  Field f = c.getDeclaredField("mViews");
-                  f.setAccessible(true);
-                  return new ArrayList<View>((List<View>) f.get(global));
-              }
-
-              /** Şu anda ekranda gerçekten görünen en iyi saat adayı; yoksa null. */
-              static Result findVisible(DisplayMetrics dm, String hint, boolean dump) {
-                  Search s = new Search();
-                  s.dm = dm;
-                  s.hint = hint.trim().toLowerCase(Locale.ROOT);
-                  s.dump = dump;
-                  fillTimes(s, System.currentTimeMillis());
-                  try {
-                      for (View root : windowRoots()) {
-                          if (root.getWindowVisibility() == View.VISIBLE) {
-                              walk(root, 1f, s);
-                          }
-                      }
-                      matchSplit(s);
-                  } catch (Throwable t) {
-                      Const.error("saat araması", t);
-                  }
-                  return s.best.view == null ? null : s.best;
-              }
-
-              /** Şimdiki ve bir önceki dakika (dakika dönerken yarış olmasın), 12 ve 24 saat biçimi. */
-              private static void fillTimes(Search s, long now) {
-                  for (long t : new long[]{now, now - 60000L}) {
-                      Calendar c = Calendar.getInstance();
-                      c.setTimeInMillis(t);
-                      int h24 = c.get(Calendar.HOUR_OF_DAY);
-                      int h12 = h24 % 12 == 0 ? 12 : h24 % 12;
-                      String mm = two(c.get(Calendar.MINUTE));
-                      for (String h : new String[]{two(h24), String.valueOf(h24),
-                              two(h12), String.valueOf(h12)}) {
-                          s.full.add(h + mm);
-                          s.hours.add(h);
-                      }
-                      s.minutes.add(mm);
-                  }
-              }
-
-              private static String two(int v) {
-                  return v < 10 ? "0" + v : String.valueOf(v);
-              }
-
-              /** Yalnızca rakamlar ve ayraçlardan oluşan metni rakam dizisine indirger. */
-              static String digits(CharSequence text) {
-                  if (text == null || text.length() == 0 || text.length() > 12) {
-                      return "";
-                  }
-                  StringBuilder out = new StringBuilder();
-                  for (int i = 0; i < text.length(); i++) {
-                      char ch = text.charAt(i);
-                      int d = Character.digit(ch, 10);
-                      if (d >= 0) {
-                          out.append(d);
-                      } else if (!(Character.isWhitespace(ch) || ch == ':' || ch == '.'
-                              || ch == '∶' || ch == '：' || ch == '‎' || ch == '‏'
-                              || ch == ' ' || ch == ' ' || ch == ' ')) {
-                          return "";
-                      }
-                  }
-                  return out.toString();
-              }
-
-              private static void walk(View v, float alpha, Search s) {
-                  if (v.getVisibility() != View.VISIBLE) {
-                      return;
-                  }
-                  alpha *= v.getAlpha();
-                  if (alpha < 0.2f) {
-                      return;
-                  }
-                  String cls = v.getClass().getName().toLowerCase(Locale.ROOT);
-                  // Durum çubuğu ve AOD alt ağaçları hiç taranmaz.
-                  if (cls.contains("phonestatusbarview") || cls.contains("keyguardstatusbarview")
-                          || cls.contains(".aod.")) {
-                      return;
-                  }
-                  String id = idName(v);
-                  if (s.dump && (cls.contains("clock") || id.contains("clock") || id.contains("time"))) {
-                      Const.log("aday: " + v.getClass().getName() + " id=" + id
-                              + " alan=" + Snapshot.visualRect(v));
-                  }
-                  int score = score(cls, id, s.hint);
-                  if (score > 0) {
-                      offer(v, score, s);
-                  }
-                  if (s.hint.length() == 0 && !excluded(cls + " " + id)) {
-                      matchText(v, s);
-                  }
-                  if (v instanceof ViewGroup) {
-                      ViewGroup g = (ViewGroup) v;
-                      for (int i = 0; i < g.getChildCount(); i++) {
-                          walk(g.getChildAt(i), alpha, s);
-                      }
-                  }
-              }
-
-              private static void matchText(View v, Search s) {
-                  // Resim/özel çizim kullanan saatler metin yerine erişilebilirlik açıklaması verebilir.
-                  if (s.full.contains(digits(v.getContentDescription()))) {
-                      offer(v, 66, s);
-                  }
-                  if (!(v instanceof TextView)) {
-                      return;
-                  }
-                  TextView t = (TextView) v;
-                  if (t.getTextSize() < s.dm.heightPixels * 0.03f) {
-                      return;
-                  }
-                  String d = digits(t.getText());
-                  if (d.length() == 0) {
-                      return;
-                  }
-                  if (s.full.contains(d)) {
-                      if (s.dump) {
-                          Const.log("saat yazısı: " + v.getClass().getName() + " id=" + idName(v));
-                      }
-                      offer(v, 70, s);
-                      return;
-                  }
-                  Part p = new Part();
-                  p.view = t;
-                  p.hour = s.hours.contains(d);
-                  p.minute = s.minutes.contains(d);
-                  if (p.hour || p.minute) {
-                      s.parts.add(p);
-                  }
-              }
-
-              /** Alt alta saat/dakika: ikisini birlikte içeren en yakın üst görünümü seç. */
-              private static void matchSplit(Search s) {
-                  for (Part h : s.parts) {
-                      for (Part m : s.parts) {
-                          if (h == m || !h.hour || !m.minute) {
-                              continue;
-                          }
-                          float ratio = h.view.getTextSize() / m.view.getTextSize();
-                          if (ratio < 0.75f || ratio > 1.34f) {
-                              continue;
-                          }
-                          View common = commonParent(h.view, m.view);
-                          if (common != null) {
-                              offer(common, 68, s);
-                          }
-                      }
-                  }
-              }
-
-              private static View commonParent(View a, View b) {
-                  List<View> chain = new ArrayList<View>();
-                  for (ViewParent p = a.getParent(); p instanceof View; p = p.getParent()) {
-                      chain.add((View) p);
-                  }
-                  for (ViewParent p = b.getParent(); p instanceof View; p = p.getParent()) {
-                      if (chain.contains(p)) {
-                          return (View) p;
-                      }
-                  }
-                  return null;
-              }
-
-              private static void offer(View v, int score, Search s) {
-                  float w = v.getWidth();
-                  float h = v.getHeight();
-                  DisplayMetrics dm = s.dm;
-                  if (w < dm.widthPixels * 0.18f || h < dm.heightPixels * 0.035f
-                          || w * h > dm.widthPixels * (float) dm.heightPixels * 0.6f) {
-                      return;
-                  }
-                  RectF r = Snapshot.visualRect(v);
-                  if (r.centerX() <= 0 || r.centerX() >= dm.widthPixels
-                          || r.centerY() <= 0 || r.centerY() >= dm.heightPixels) {
-                      return;
-                  }
-                  float area = r.width() * r.height();
-                  Result best = s.best;
-                  if (score > best.score || (score == best.score && area > best.area)) {
-                      best.view = v;
-                      best.score = score;
-                      best.area = area;
-                      best.rect = r;
-                  }
-              }
-
-              private static String idName(View v) {
-                  int id = v.getId();
-                  // 0x7f.. ve sistem kaynakları dışındaki üretilmiş id'lerin adı yoktur.
-                  if (id == View.NO_ID || (id >>> 24) == 0) {
-                      return "";
-                  }
-                  try {
-                      return v.getResources().getResourceEntryName(id).toLowerCase(Locale.ROOT);
-                  } catch (Throwable ignored) {
-                      return "";
-                  }
-              }
-
-              private static boolean excluded(String names) {
-                  return names.contains("aod") || names.contains("status_bar")
-                          || names.contains("statusbar") || names.contains("alarm")
-                          || names.contains("chronometer") || names.contains("invisible");
-              }
-
-              private static int score(String cls, String id, String hint) {
-                  if (hint.length() > 0) {
-                      return cls.contains(hint) || id.contains(hint) ? 1000 : 0;
-                  }
-                  String both = cls + " " + id;
-                  if (excluded(both) || !both.contains("clock")) {
-                      return 0;
-                  }
-                  // AOSP kökenli adlar
-                  if (id.startsWith("lockscreen_clock_view")) return 85;
-                  if (cls.endsWith(".animatableclockview")) return 80;
-                  if (id.equals("keyguard_clock_container")) return 60;
-                  if (cls.endsWith(".keyguardclockswitch")) return 55;
-                  // Samsung için genel sezgiler ("clock" içinde "lock" geçtiği için tam kelimeler aranır)
-                  if (both.contains("keyguard") || both.contains("lockscreen") || both.contains("lockstar")
-                          || both.contains("facewidget") || both.contains("pluginlock")) {
-                      return 50;
-                  }
-                  if (cls.startsWith("com.samsung.")) return 45;
-                  return 20;
-              }
-          }
-          FC_EOF
-
-      - name: "Kaynak - FlightOverlay.java"
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "project/src/com/fluxclock/transition"
-          cat > 'project/src/com/fluxclock/transition/FlightOverlay.java' <<'FC_EOF'
-          package com.fluxclock.transition;
-
-          import android.animation.Animator;
-          import android.animation.AnimatorListenerAdapter;
-          import android.animation.ValueAnimator;
-          import android.content.Context;
-          import android.graphics.Bitmap;
-          import android.graphics.PixelFormat;
-          import android.graphics.RectF;
-          import android.view.Display;
-          import android.view.View;
-          import android.view.ViewTreeObserver;
-          import android.view.WindowManager;
-          import android.view.animation.LinearInterpolator;
-          import android.widget.FrameLayout;
-          import android.widget.ImageView;
-
-          /**
-           * Kilit ekranı penceresinin üstünde uçan saat. Her karede yalnızca translation/scale/alpha
-           * değişir (RenderThread özellikleri); bitmap yeniden çizilmez, bellek ayrılmaz.
-           */
-          final class FlightOverlay {
-
-              interface Listener {
-                  /** İlk kare hazır: orijinal saat artık gizlenebilir. */
-                  void onVisible();
-
-                  /** Hedefe varıldı: gerçek widget artık gösterilebilir. */
-                  void onLanded();
-
-                  /** Katman kaldırıldı. */
-                  void onRemoved();
-              }
-
-              private static final int TYPE_STATUS_BAR_SUB_PANEL = 2017;
-              private static final int TYPE_APPLICATION_OVERLAY = 2038;
-
-              private final Context context;
-              private final WindowManager wm;
-              private final Listener listener;
-              private final Snapshot source;
-              private final FrameLayout root;
-              private final ImageView from;
-              private final ImageView to;
-              private final RectF goal = new RectF();
-              private final RectF smooth = new RectF();
-              private final RectF now = new RectF();
-              private final int[] origin = new int[2];
-              private Bitmap targetBitmap;
-              private boolean fadeAtEnd;
-              private ValueAnimator animator;
-              private boolean removed;
-              private boolean landed;
-
-              FlightOverlay(Context context, Snapshot source, Listener listener) {
-                  this.context = context;
-                  this.source = source;
-                  this.listener = listener;
-                  wm = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
-                  root = new FrameLayout(context);
-                  from = image(source.bitmap);
-                  to = image(null);
-                  to.setAlpha(0f);
-              }
-
-              private ImageView image(Bitmap b) {
-                  ImageView v = new ImageView(context);
-                  v.setScaleType(ImageView.ScaleType.FIT_XY);
-                  v.setPivotX(0f);
-                  v.setPivotY(0f);
-                  if (b != null) {
-                      v.setImageBitmap(b);
-                      root.addView(v, new FrameLayout.LayoutParams(b.getWidth(), b.getHeight()));
-                  } else {
-                      v.setVisibility(View.INVISIBLE);
-                  }
-                  return v;
-              }
-
-              /** Uçuş sırasında da çağrılabilir; hedef yumuşakça güncellenir. */
-              void setTarget(RectF rect, Bitmap bitmap, boolean fadeOut) {
-                  if (removed || landed) {
-                      return;
-                  }
-                  goal.set(rect);
-                  if (smooth.isEmpty()) {
-                      smooth.set(rect);
-                  }
-                  fadeAtEnd = fadeOut;
-                  if (bitmap != null) {
-                      targetBitmap = bitmap;
-                      to.setImageBitmap(bitmap);
-                      if (to.getParent() == null) {
-                          root.addView(to, new FrameLayout.LayoutParams(
-                                  bitmap.getWidth(), bitmap.getHeight()));
-                      } else {
-                          to.setLayoutParams(new FrameLayout.LayoutParams(
-                                  bitmap.getWidth(), bitmap.getHeight()));
-                      }
-                      to.setVisibility(View.VISIBLE);
-                  } else {
-                      targetBitmap = null;
-                      to.setVisibility(View.INVISIBLE);
-                  }
-              }
-
-              boolean show(final long duration, final float damping) {
-                  if (!addWindow(TYPE_STATUS_BAR_SUB_PANEL) && !addWindow(TYPE_APPLICATION_OVERLAY)) {
-                      return false;
-                  }
-                  root.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
-                      @Override
-                      public boolean onPreDraw() {
-                          root.getViewTreeObserver().removeOnPreDrawListener(this);
-                          try {
-                              root.getLocationOnScreen(origin);
-                              apply(0f, 0f);
-                              root.post(new Runnable() {
-                                  @Override
-                                  public void run() {
-                                      start(duration, damping);
-                                  }
-                              });
-                          } catch (Throwable t) {
-                              Const.error("ilk kare", t);
-                              remove();
-                          }
-                          return true;
-                      }
-                  });
-                  return true;
-              }
-
-              private boolean addWindow(int type) {
-                  try {
-                      WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
-                              WindowManager.LayoutParams.MATCH_PARENT,
-                              WindowManager.LayoutParams.MATCH_PARENT,
-                              type,
-                              WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                                      | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-                                      | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                                      | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-                                      | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
-                              PixelFormat.TRANSLUCENT);
-                      lp.setTitle("FluxClockFlight");
-                      lp.windowAnimations = 0;
-                      setIntField(lp, "layoutInDisplayCutoutMode", 3); // ALWAYS
-                      invokeInt(lp, "setFitInsetsTypes", 0);
-                      // Uçuş boyunca panelin en yüksek yenileme hızını iste (ör. 120 Hz).
-                      setFloatField(lp, "preferredRefreshRate", maxRefreshRate());
-                      wm.addView(root, lp);
-                      return true;
-                  } catch (Throwable t) {
-                      Const.debug("pencere eklenemedi type=" + type + ": " + t);
-                      return false;
-                  }
-              }
-
-              private float maxRefreshRate() {
-                  float max = 60f;
-                  Display d = wm.getDefaultDisplay();
-                  for (float r : d.getSupportedRefreshRates()) {
-                      max = Math.max(max, r);
-                  }
-                  return max;
-              }
-
-              private static void setIntField(Object o, String name, int value) {
-                  try {
-                      o.getClass().getField(name).setInt(o, value);
-                  } catch (Throwable ignored) {
-                      Const.debug(name + " yok");
-                  }
-              }
-
-              private static void setFloatField(Object o, String name, float value) {
-                  try {
-                      o.getClass().getField(name).setFloat(o, value);
-                  } catch (Throwable ignored) {
-                      Const.debug(name + " yok");
-                  }
-              }
-
-              private static void invokeInt(Object o, String name, int value) {
-                  try {
-                      o.getClass().getMethod(name, int.class).invoke(o, value);
-                  } catch (Throwable ignored) {
-                      Const.debug(name + " yok");
-                  }
-              }
-
-              private void start(long duration, float damping) {
-                  if (removed) {
-                      return;
-                  }
-                  listener.onVisible();
-                  final Spring spring = new Spring(damping);
-                  animator = ValueAnimator.ofFloat(0f, 1f);
-                  animator.setDuration(duration);
-                  animator.setInterpolator(new LinearInterpolator());
-                  animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
-                      private long last;
-
-                      @Override
-                      public void onAnimationUpdate(ValueAnimator a) {
-                          long t = System.nanoTime();
-                          float dt = last == 0 ? 0.008f : (t - last) / 1e9f;
-                          last = t;
-                          float linear = (Float) a.getAnimatedValue();
-                          // Hedef değişirse sıçrama olmadan yaklaş (kare hızından bağımsız).
-                          float k = 1f - (float) Math.exp(-dt * 28f);
-                          k = Math.max(k, linear * linear * linear);
-                          smooth.left += (goal.left - smooth.left) * k;
-                          smooth.top += (goal.top - smooth.top) * k;
-                          smooth.right += (goal.right - smooth.right) * k;
-                          smooth.bottom += (goal.bottom - smooth.bottom) * k;
-                          apply(spring.getInterpolation(linear), linear);
-                      }
-                  });
-                  animator.addListener(new AnimatorListenerAdapter() {
-                      @Override
-                      public void onAnimationEnd(Animator a) {
-                          if (removed) {
-                              return;
-                          }
-                          smooth.set(goal);
-                          apply(1f, 1f);
-                          landed = true;
-                          listener.onLanded();
-                          // Kısa bindirme: launcher widget'ı geri getirirken boşluk görünmez.
-                          root.animate().alpha(0f).setStartDelay(70).setDuration(130)
-                                  .withEndAction(new Runnable() {
-                                      @Override
-                                      public void run() {
-                                          remove();
-                                      }
-                                  });
-                      }
-                  });
-                  animator.start();
-              }
-
-              private void apply(float p, float linear) {
-                  RectF s = source.rect;
-                  now.set(s.left + (smooth.left - s.left) * p,
-                          s.top + (smooth.top - s.top) * p,
-                          s.right + (smooth.right - s.right) * p,
-                          s.bottom + (smooth.bottom - s.bottom) * p);
-                  place(from, source.bitmap);
-                  if (targetBitmap != null) {
-                      place(to, targetBitmap);
-                      from.setAlpha(1f - ramp(linear, 0.12f, 0.62f));
-                      to.setAlpha(ramp(linear, 0.18f, 0.68f));
-                  } else {
-                      from.setAlpha(fadeAtEnd ? 1f - ramp(linear, 0.55f, 1f) : 1f);
-                  }
-              }
-
-              /** En-boy oranını bozmadan dikdörtgenin içine ortalar. */
-              private void place(ImageView v, Bitmap b) {
-                  float scale = Math.min(now.width() / b.getWidth(), now.height() / b.getHeight());
-                  v.setScaleX(scale);
-                  v.setScaleY(scale);
-                  v.setTranslationX(now.centerX() - b.getWidth() * scale / 2f - origin[0]);
-                  v.setTranslationY(now.centerY() - b.getHeight() * scale / 2f - origin[1]);
-              }
-
-              private static float ramp(float x, float a, float b) {
-                  float t = Math.max(0f, Math.min(1f, (x - a) / (b - a)));
-                  return t * t * (3f - 2f * t);
-              }
-
-              boolean isLanded() {
-                  return landed;
-              }
-
-              void remove() {
-                  if (removed) {
-                      return;
-                  }
-                  removed = true;
-                  if (animator != null) {
-                      animator.cancel();
-                  }
-                  try {
-                      root.animate().cancel();
-                      wm.removeViewImmediate(root);
-                  } catch (Throwable t) {
-                      Const.debug("katman kaldırılamadı: " + t);
-                  }
-                  listener.onRemoved();
-              }
-          }
-          FC_EOF
-
-      - name: "Kaynak - SystemUiController.java"
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "project/src/com/fluxclock/transition"
-          cat > 'project/src/com/fluxclock/transition/SystemUiController.java' <<'FC_EOF'
-          package com.fluxclock.transition;
-
-          import android.app.ActivityManager;
-          import android.app.Application;
-          import android.app.KeyguardManager;
-          import android.content.BroadcastReceiver;
-          import android.content.ComponentName;
-          import android.content.Context;
-          import android.content.Intent;
-          import android.content.IntentFilter;
-          import android.content.pm.PackageManager;
-          import android.content.pm.ResolveInfo;
-          import android.graphics.Bitmap;
-          import android.graphics.BitmapFactory;
-          import android.graphics.RectF;
-          import android.os.Handler;
-          import android.os.Looper;
-          import android.os.PowerManager;
-          import android.os.SystemClock;
-          import android.provider.Settings;
-          import android.text.format.DateFormat;
-          import android.util.DisplayMetrics;
-          import android.view.View;
-          import android.view.WindowManager;
-
-          import java.lang.ref.WeakReference;
-          import java.util.List;
-
-          import de.robv.android.xposed.XC_MethodHook;
-          import de.robv.android.xposed.XSharedPreferences;
-          import de.robv.android.xposed.XposedBridge;
-
-          /** Kilit açılışını yakalar ve saat uçuşunu yönetir. Tüm durum ana iş parçacığındadır. */
-          final class SystemUiController {
-
-              /** Launcher'dan gelen son bilinen hedef. */
-              private static final class Target {
-                  boolean found;
-                  RectF rect;
-                  Bitmap bitmap;
-                  int screenW;
-              }
-
-              private final Application app;
-              private final Handler main = new Handler(Looper.getMainLooper());
-              private final XSharedPreferences prefs = new XSharedPreferences(Const.PKG, Const.PREFS);
-
-              private Target cached;
-              private WeakReference<View> restView = new WeakReference<View>(null);
-              private Snapshot rest;
-              private int restScreenW;
-              private FlightOverlay overlay;
-              private View hiddenClock;
-              private View pendingClock;
-              private Snapshot flightSource;
-              private boolean launcherHidden;
-              private boolean visible;
-              private boolean liveTargetUsed;
-              private long lastTrigger;
-              private long request;
-              private Runnable pendingStart;
-
-              private final Runnable rememberRest = new Runnable() {
-                  @Override
-                  public void run() {
-                      try {
-                          captureRest();
-                      } catch (Throwable t) {
-                          Const.error("dinlenme konumu", t);
-                      }
-                  }
-              };
-
-              private final Runnable watchdog = new Runnable() {
-                  @Override
-                  public void run() {
-                      cancel("zaman aşımı");
-                  }
-              };
-
-              SystemUiController(Application app) {
-                  this.app = app;
-              }
-
-              void install(ClassLoader loader) throws Exception {
-                  reload();
-                  registerReceivers();
-                  int n = 0;
-                  n += hook(loader, "com.android.systemui.statusbar.phone.StatusBarKeyguardViewManager",
-                          "hide", false);
-                  n += hook(loader, "com.android.systemui.statusbar.policy.KeyguardStateControllerImpl",
-                          "notifyKeyguardGoingAway", true);
-                  n += hook(loader, "com.android.systemui.keyguard.KeyguardViewMediator",
-                          "keyguardGoingAway", false);
-                  n += hook(loader, "com.android.systemui.keyguard.KeyguardViewMediator",
-                          "handleStartKeyguardExitAnimation", false);
-                  Const.log("SystemUI kilit açma hook sayısı: " + n
-                          + (n == 0 ? " (yalnızca USER_PRESENT yedeği kullanılacak)" : ""));
-              }
-
-              private int hook(ClassLoader loader, String className, final String method,
-                      final boolean needsTrueArg) {
-                  try {
-                      Class<?> c = Class.forName(className, false, loader);
-                      int count = XposedBridge.hookAllMethods(c, method, new XC_MethodHook() {
-                          @Override
-                          protected void beforeHookedMethod(MethodHookParam param) {
-                              try {
-                                  if (needsTrueArg && !(param.args.length > 0
-                                          && Boolean.TRUE.equals(param.args[0]))) {
-                                      return;
-                                  }
-                                  onUnlockSignal(method);
-                              } catch (Throwable t) {
-                                  Const.error(method, t);
-                              }
-                          }
-                      }).size();
-                      Const.log(className + "#" + method + " -> " + count);
-                      return count;
-                  } catch (Throwable t) {
-                      Const.log("bulunamadı: " + className);
-                      return 0;
-                  }
-              }
-
-              private void onUnlockSignal(final String source) {
-                  Runnable r = new Runnable() {
-                      @Override
-                      public void run() {
-                          try {
-                              trigger(source);
-                          } catch (Throwable t) {
-                              Const.error("geçiş başlatılamadı", t);
-                              cancel("hata");
-                          }
-                      }
-                  };
-                  // Ana iş parçacığındaysak hemen çalış: saat henüz ekranda.
-                  if (Looper.myLooper() == Looper.getMainLooper()) {
-                      r.run();
-                  } else {
-                      main.post(r);
-                  }
-              }
-
-              private void registerReceivers() throws Exception {
-                  IntentFilter f = new IntentFilter();
-                  f.addAction(Intent.ACTION_SCREEN_ON);
-                  f.addAction(Intent.ACTION_SCREEN_OFF);
-                  f.addAction(Intent.ACTION_USER_PRESENT);
-                  f.addAction(Const.ACTION_TARGET);
-                  Const.register(app, new BroadcastReceiver() {
-                      @Override
-                      public void onReceive(Context c, Intent i) {
-                          try {
-                              String a = i.getAction();
-                              if (Intent.ACTION_SCREEN_ON.equals(a)) {
-                                  reload();
-                                  main.removeCallbacks(rememberRest);
-                                  main.postDelayed(rememberRest, 800);
-                              } else if (Intent.ACTION_SCREEN_OFF.equals(a)) {
-                                  main.removeCallbacks(rememberRest);
-                                  cancel("ekran kapandı");
-                                  lastTrigger = 0;
-                                  reload();
-                              } else if (Intent.ACTION_USER_PRESENT.equals(a)) {
-                                  trigger("USER_PRESENT");
-                              } else if (Const.ACTION_TARGET.equals(a)
-                                      && Const.from(i, Const.LAUNCHER)) {
-                                  onTarget(i);
-                              }
-                          } catch (Throwable t) {
-                              Const.error("SystemUI receiver", t);
-                          }
-                      }
-                  }, f, main);
-              }
-
-              private void reload() {
-                  try {
-                      prefs.reload();
-                      Const.debug = prefs.getBoolean("debug", false);
-                  } catch (Throwable t) {
-                      Const.error("ayarlar okunamadı", t);
-                  }
-              }
-
-              private DisplayMetrics metrics() {
-                  DisplayMetrics dm = new DisplayMetrics();
-                  ((WindowManager) app.getSystemService(Context.WINDOW_SERVICE))
-                          .getDefaultDisplay().getRealMetrics(dm);
-                  return dm;
-              }
-
-              private void captureRest() {
-                  KeyguardManager km = (KeyguardManager) app.getSystemService(Context.KEYGUARD_SERVICE);
-                  if (overlay != null || !km.isKeyguardLocked()) {
-                      return;
-                  }
-                  DisplayMetrics dm = metrics();
-                  ClockFinder.Result found = ClockFinder.findVisible(
-                          dm, prefs.getString("lockHint", ""), Const.debug);
-                  if (found == null) {
-                      Const.debug("kilit ekranında saat adayı bulunamadı");
-                      return;
-                  }
-                  Snapshot s = Snapshot.of(found.view, found.rect);
-                  rest = s != null ? s : Snapshot.text(found.rect, DateFormat.is24HourFormat(app));
-                  restView = new WeakReference<View>(found.view);
-                  restScreenW = dm.widthPixels;
-                  Const.debug("saat: " + found.view.getClass().getName() + " " + rest.rect
-                          + (s == null ? " (yedek yazı)" : ""));
-                  // Ana ekran hedefini kilit açılmadan önce tazele.
-                  query(0);
-              }
-
-              private void trigger(String source) {
-                  long time = SystemClock.uptimeMillis();
-                  if (!prefs.getBoolean("enabled", true) || overlay != null || pendingStart != null
-                          || time - lastTrigger < 2500) {
-                      return;
-                  }
-                  PowerManager pm = (PowerManager) app.getSystemService(Context.POWER_SERVICE);
-                  if (!pm.isInteractive() || animationsDisabled()) {
-                      return;
-                  }
-                  String top = topPackage();
-                  String homePkg = homePackage();
-                  if (top != null && homePkg != null && !top.equals(homePkg)) {
-                      Const.debug("hedef ana ekran değil: " + top);
-                      return;
-                  }
-
-                  final DisplayMetrics dm = metrics();
-                  ClockFinder.Result live = ClockFinder.findVisible(
-                          dm, prefs.getString("lockHint", ""), false);
-                  Snapshot source0 = null;
-                  View clockView = null;
-                  if (live != null) {
-                      clockView = live.view;
-                      source0 = Snapshot.of(live.view, live.rect);
-                      if (source0 == null) {
-                          source0 = Snapshot.text(live.rect, DateFormat.is24HourFormat(app));
-                      }
-                  } else if (rest != null && restScreenW == dm.widthPixels) {
-                      // Ekran yönü veya katlanır ekran değiştiyse eski konum kullanılmaz.
-                      // Saat kaydırmayla solmuş/gizlenmiş: dinlenme konumunu kullan, saati tazele.
-                      clockView = restView.get();
-                      if (clockView != null && clockView.isAttachedToWindow()) {
-                          source0 = Snapshot.of(clockView, rest.rect);
-                      }
-                      if (source0 == null) {
-                          source0 = Snapshot.text(rest.rect, DateFormat.is24HourFormat(app));
-                      }
-                  }
-                  if (source0 == null) {
-                      Const.debug("kaynak saat yok (" + source + ")");
-                      return;
-                  }
-                  lastTrigger = time;
-                  Const.debug("geçiş tetiklendi: " + source);
-
-                  final Snapshot from = source0;
-                  final View clock = clockView;
-                  request = time;
-                  liveTargetUsed = false;
-                  final boolean manual = prefs.getBoolean("manual", false);
-                  if (!manual) {
-                      query(request);
-                  }
-                  pendingStart = new Runnable() {
-                      @Override
-                      public void run() {
-                          pendingStart = null;
-                          try {
-                              begin(from, clock, dm);
-                          } catch (Throwable t) {
-                              Const.error("uçuş", t);
-                              cancel("hata");
-                          }
-                      }
-                  };
-                  // Bilinen hedef varsa beklemeden başla; yoksa launcher'a kısa bir süre tanı.
-                  if (manual || usable(cached, dm)) {
-                      pendingStart.run();
-                  } else {
-                      main.postDelayed(pendingStart, 110);
-                  }
-              }
-
-              private static boolean usable(Target t, DisplayMetrics dm) {
-                  return t != null && t.found && t.screenW == dm.widthPixels;
-              }
-
-              private void begin(Snapshot from, View clock, DisplayMetrics dm) {
-                  final long duration = Math.max(200, Math.min(1500, prefs.getInt("duration", 520)));
-                  final float damping = prefs.getInt("damping", 86) / 100f;
-                  final boolean manual = prefs.getBoolean("manual", false);
-
-                  FlightOverlay flight = new FlightOverlay(app, from, new FlightOverlay.Listener() {
-                      @Override
-                      public void onVisible() {
-                          visible = true;
-                          hiddenClock = pendingClock;
-                          Const.setHidden(hiddenClock, true);
-                          if (liveTargetUsed) {
-                              flightMessage(true, duration + 700);
-                          }
-                      }
-
-                      @Override
-                      public void onLanded() {
-                          if (launcherHidden) {
-                              flightMessage(false, 0);
-                          }
-                      }
-
-                      @Override
-                      public void onRemoved() {
-                          finish();
-                      }
-                  });
-
-                  if (manual) {
-                      float w = dm.widthPixels * prefs.getInt("manualW", 60) / 100f;
-                      float h = w * from.rect.height() / from.rect.width();
-                      float cx = dm.widthPixels * prefs.getInt("manualX", 50) / 100f;
-                      float cy = dm.heightPixels * prefs.getInt("manualY", 20) / 100f;
-                      flight.setTarget(new RectF(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2),
-                              null, true);
-                  } else if (usable(cached, dm)) {
-                      flight.setTarget(cached.rect, cached.bitmap, false);
-                      liveTargetUsed = true;
-                  } else if (prefs.getBoolean("statusFallback", true)) {
-                      flight.setTarget(statusBarRect(from, dm), null, true);
-                  } else {
-                      Const.debug("hedef yok, animasyon atlandı");
-                      return;
-                  }
-                  overlay = flight;
-                  flightSource = from;
-                  pendingClock = clock;
-                  visible = false;
-                  main.postDelayed(watchdog, duration + 1500);
-                  if (!flight.show(duration, damping)) {
-                      Const.log("animasyon penceresi açılamadı");
-                      cancel("pencere yok");
-                  }
-              }
-
-              private RectF statusBarRect(Snapshot from, DisplayMetrics dm) {
-                  int id = app.getResources().getIdentifier("status_bar_height", "dimen", "android");
-                  float bar = id > 0 ? app.getResources().getDimensionPixelSize(id) : 32 * dm.density;
-                  float h = 15 * dm.density;
-                  float w = Math.min(64 * dm.density, h * from.rect.width() / from.rect.height());
-                  float left = 18 * dm.density;
-                  float top = (bar - h) / 2f;
-                  return new RectF(left, top, left + w, top + h);
-              }
-
-              private void onTarget(Intent i) {
-                  Target t = new Target();
-                  t.found = i.getBooleanExtra("found", false);
-                  t.screenW = i.getIntExtra("screenW", 0);
-                  if (t.found) {
-                      float[] r = i.getFloatArrayExtra("rect");
-                      if (r == null || r.length != 4 || !(r[2] > r[0]) || !(r[3] > r[1])) {
-                          return;
-                      }
-                      t.rect = new RectF(r[0], r[1], r[2], r[3]);
-                      byte[] png = i.getByteArrayExtra("png");
-                      if (png != null) {
-                          t.bitmap = BitmapFactory.decodeByteArray(png, 0, png.length);
-                      }
-                  }
-                  cached = t;
-                  long id = i.getLongExtra("request", 0);
-                  if (id == 0 || id != request || prefs.getBoolean("manual", false)) {
-                      return;
-                  }
-                  DisplayMetrics dm = metrics();
-                  if (pendingStart != null) {
-                      Runnable r = pendingStart;
-                      main.removeCallbacks(r);
-                      r.run();
-                  } else if (overlay != null && !overlay.isLanded()) {
-                      if (usable(t, dm)) {
-                          overlay.setTarget(t.rect, t.bitmap, false);
-                          liveTargetUsed = true;
-                          if (visible) {
-                              flightMessage(true, 1500);
-                          }
-                      } else if (liveTargetUsed && prefs.getBoolean("statusFallback", true)) {
-                          // Önbellek eskiydi: bu sayfada artık saat widget'ı yok.
-                          liveTargetUsed = false;
-                          overlay.setTarget(statusBarRect(flightSource, dm), null, true);
-                          if (launcherHidden) {
-                              flightMessage(false, 0);
-                          }
-                      }
-                  }
-              }
-
-              private void query(long id) {
-                  Intent q = new Intent(Const.ACTION_QUERY).setPackage(Const.LAUNCHER);
-                  // Kilit açılışında öncelikli teslim.
-                  q.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
-                  Const.sign(app, q);
-                  q.putExtra("request", id);
-                  q.putExtra("debug", Const.debug);
-                  q.putExtra("hint", prefs.getString("widgetHint", ""));
-                  app.sendBroadcast(q);
-              }
-
-              private void flightMessage(boolean hide, long timeout) {
-                  launcherHidden = hide;
-                  Intent m = new Intent(Const.ACTION_FLIGHT).setPackage(Const.LAUNCHER);
-                  m.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
-                  Const.sign(app, m);
-                  m.putExtra("hide", hide);
-                  m.putExtra("timeout", timeout);
-                  m.putExtra("debug", Const.debug);
-                  app.sendBroadcast(m);
-              }
-
-              private void cancel(String why) {
-                  if (pendingStart != null) {
-                      main.removeCallbacks(pendingStart);
-                      pendingStart = null;
-                  }
-                  if (overlay != null) {
-                      Const.debug("iptal: " + why);
-                      overlay.remove();
-                  }
-                  finish();
-              }
-
-              /** Her çıkış yolunda çalışır: gizlenen hiçbir şey gizli kalmaz. */
-              private void finish() {
-                  main.removeCallbacks(watchdog);
-                  Const.setHidden(hiddenClock, false);
-                  hiddenClock = null;
-                  pendingClock = null;
-                  flightSource = null;
-                  overlay = null;
-                  visible = false;
-                  if (launcherHidden) {
-                      flightMessage(false, 0);
-                  }
-              }
-
-              private boolean animationsDisabled() {
-                  return Settings.Global.getFloat(app.getContentResolver(),
-                          Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f;
-              }
-
-              @SuppressWarnings("deprecation")
-              private String topPackage() {
-                  try {
-                      ActivityManager am = (ActivityManager) app.getSystemService(Context.ACTIVITY_SERVICE);
-                      List<ActivityManager.RunningTaskInfo> tasks = am.getRunningTasks(1);
-                      if (tasks != null && !tasks.isEmpty()) {
-                          ComponentName c = tasks.get(0).topActivity;
-                          return c == null ? null : c.getPackageName();
-                      }
-                  } catch (Throwable t) {
-                      Const.debug("üstteki uygulama okunamadı: " + t);
-                  }
-                  return null;
-              }
-
-              private String homePackage() {
-                  ResolveInfo r = app.getPackageManager().resolveActivity(
-                          new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
-                          PackageManager.MATCH_DEFAULT_ONLY);
-                  return r == null || r.activityInfo == null ? null : r.activityInfo.packageName;
-              }
-          }
-          FC_EOF
-
-      - name: "Kaynak - LauncherAgent.java"
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "project/src/com/fluxclock/transition"
-          cat > 'project/src/com/fluxclock/transition/LauncherAgent.java' <<'FC_EOF'
-          package com.fluxclock.transition;
-
-          import android.app.Activity;
-          import android.app.Application;
-          import android.appwidget.AppWidgetHostView;
-          import android.appwidget.AppWidgetProviderInfo;
-          import android.content.BroadcastReceiver;
-          import android.content.Context;
-          import android.content.Intent;
-          import android.content.IntentFilter;
-          import android.content.pm.ResolveInfo;
-          import android.graphics.Bitmap;
-          import android.graphics.RectF;
-          import android.os.Bundle;
-          import android.os.Handler;
-          import android.os.HandlerThread;
-          import android.os.Looper;
-          import android.os.PowerManager;
-          import android.util.DisplayMetrics;
-          import android.view.View;
-          import android.view.ViewGroup;
-          import android.view.ViewParent;
-          import android.view.ViewTreeObserver;
-
-          import java.io.ByteArrayOutputStream;
-          import java.lang.ref.WeakReference;
-          import java.util.Locale;
-
-          /**
-           * Ana ekran tarafı: saat widget'ını bulur, konumunu/görüntüsünü SystemUI'ye bildirir ve
-           * uçuş süresince widget'ı gizler. Sürekli yoklama yapmaz; yalnızca olaylarla çalışır.
-           */
-          final class LauncherAgent implements Application.ActivityLifecycleCallbacks {
-
-              private static final int MAX_PNG_BYTES = 350 * 1024;
-
-              private final Application app;
-              private final Handler main = new Handler(Looper.getMainLooper());
-              private final Handler io;
-              private WeakReference<Activity> home = new WeakReference<Activity>(null);
-              private WeakReference<View> widget = new WeakReference<View>(null);
-              private WeakReference<View> observed = new WeakReference<View>(null);
-              private View hidden;
-              private String hint = "";
-              /** Ana ekran dururken yapılan son güvenilir ölçüm. */
-              private WeakReference<View> restWidget = new WeakReference<View>(null);
-              private RectF restRect;
-              private int restScreenW;
-
-              private final Runnable publish = new Runnable() {
-                  @Override
-                  public void run() {
-                      try {
-                          Activity a = home.get();
-                          // Kendiliğinden bildirim yalnızca ana ekran dururken yapılır.
-                          if (a != null && a.hasWindowFocus() && hidden == null) {
-                              report(0, true);
-                          }
-                      } catch (Throwable t) {
-                          Const.error("launcher publish", t);
-                      }
-                  }
-              };
-
-              private final Runnable restore = new Runnable() {
-                  @Override
-                  public void run() {
-                      Const.setHidden(hidden, false);
-                      hidden = null;
-                  }
-              };
-
-              private final ViewTreeObserver.OnScrollChangedListener onScroll =
-                      new ViewTreeObserver.OnScrollChangedListener() {
-                          @Override
-                          public void onScrollChanged() {
-                              schedule(450);
-                          }
-                      };
-
-              private final ViewTreeObserver.OnWindowFocusChangeListener onFocus =
-                      new ViewTreeObserver.OnWindowFocusChangeListener() {
-                          @Override
-                          public void onWindowFocusChanged(boolean focus) {
-                              if (focus) {
-                                  schedule(700);
-                              }
-                          }
-                      };
-
-              LauncherAgent(Application app) {
-                  this.app = app;
-                  HandlerThread thread = new HandlerThread("fluxclock-io");
-                  thread.start();
-                  io = new Handler(thread.getLooper());
-              }
-
-              void install() throws Exception {
-                  app.registerActivityLifecycleCallbacks(this);
-                  IntentFilter f = new IntentFilter(Const.ACTION_QUERY);
-                  f.addAction(Const.ACTION_FLIGHT);
-                  Const.register(app, new BroadcastReceiver() {
-                      @Override
-                      public void onReceive(Context c, Intent i) {
-                          try {
-                              if (!Const.from(i, Const.SYSTEMUI)) {
-                                  return;
-                              }
-                              Const.debug = i.getBooleanExtra("debug", false);
-                              if (Const.ACTION_QUERY.equals(i.getAction())) {
-                                  String h = i.getStringExtra("hint");
-                                  String next = h == null ? "" : h.trim().toLowerCase(Locale.ROOT);
-                                  if (!next.equals(hint)) {
-                                      hint = next;
-                                      restRect = null;
-                                  }
-                                  Activity a = home.get();
-                                  report(i.getLongExtra("request", 0), a != null && a.hasWindowFocus());
-                              } else if (i.getBooleanExtra("hide", false)) {
-                                  hideWidget(Math.min(3000L, i.getLongExtra("timeout", 1500L)));
-                              } else {
-                                  main.removeCallbacks(restore);
-                                  restore.run();
-                              }
-                          } catch (Throwable t) {
-                              Const.error("launcher receiver", t);
-                          }
-                      }
-                  }, f, main);
-              }
-
-              private void schedule(long delay) {
-                  main.removeCallbacks(publish);
-                  main.postDelayed(publish, delay);
-              }
-
-              private void hideWidget(long timeout) {
-                  main.removeCallbacks(restore);
-                  restore.run();
-                  hidden = widget.get();
-                  Const.setHidden(hidden, true);
-                  // Güvenlik: geri getirme mesajı kaybolsa bile widget görünmez kalmaz.
-                  main.postDelayed(restore, timeout);
-              }
-
-              private void report(long request, boolean atRest) {
-                  Activity a = home.get();
-                  final Intent out = new Intent(Const.ACTION_TARGET).setPackage(Const.SYSTEMUI);
-                  Const.sign(app, out);
-                  out.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
-                  out.putExtra("request", request);
-                  DisplayMetrics dm = new DisplayMetrics();
-                  Snapshot snap = null;
-                  if (a != null && a.getWindow() != null) {
-                      a.getWindowManager().getDefaultDisplay().getRealMetrics(dm);
-                      View decor = a.getWindow().getDecorView();
-                      View remembered = restWidget.get();
-                      View best;
-                      RectF r = null;
-                      if (!atRest && restRect != null && restScreenW == dm.widthPixels
-                              && remembered != null && attachedAndShown(remembered)) {
-                          // Kilit sırasında / açılış animasyonunda dururken ölçülen konumu kullan.
-                          best = remembered;
-                          r = new RectF(restRect);
-                      } else {
-                          best = findWidget(decor, dm, atRest);
-                          if (best != null) {
-                              boolean trusted = atRest && unscaled(best);
-                              r = trusted ? Snapshot.visualRect(best) : Snapshot.layoutRect(best);
-                              if (trusted) {
-                                  restWidget = new WeakReference<View>(best);
-                                  restRect = new RectF(r);
-                                  restScreenW = dm.widthPixels;
-                              }
-                          } else if (atRest) {
-                              restRect = null;
-                          }
-                      }
-                      widget = new WeakReference<View>(best);
-                      if (best != null) {
-                          snap = Snapshot.of(best, r);
-                          out.putExtra("found", true);
-                          RectF target = snap != null ? snap.rect : r;
-                          out.putExtra("rect", new float[]{
-                                  target.left, target.top, target.right, target.bottom});
-                      }
-                  }
-                  out.putExtra("screenW", dm.widthPixels);
-                  final Bitmap bitmap = snap == null ? null : snap.bitmap;
-                  // PNG sıkıştırma arka planda; ana ekranın kare süresini etkilemez.
-                  io.post(new Runnable() {
-                      @Override
-                      public void run() {
-                          try {
-                              if (bitmap != null) {
-                                  byte[] png = encode(bitmap);
-                                  if (png != null) {
-                                      out.putExtra("png", png);
-                                  }
-                              }
-                              app.sendBroadcast(out);
-                          } catch (Throwable t) {
-                              Const.error("hedef gönderilemedi", t);
-                          }
-                      }
-                  });
-              }
-
-              private static byte[] encode(Bitmap b) {
-                  Bitmap cur = b;
-                  for (int attempt = 0; attempt < 3; attempt++) {
-                      ByteArrayOutputStream os = new ByteArrayOutputStream();
-                      cur.compress(Bitmap.CompressFormat.PNG, 100, os);
-                      if (os.size() <= MAX_PNG_BYTES) {
-                          return os.toByteArray();
-                      }
-                      cur = Bitmap.createScaledBitmap(cur, Math.max(1, cur.getWidth() * 2 / 3),
-                              Math.max(1, cur.getHeight() * 2 / 3), true);
-                  }
-                  return null;
-              }
-
-              private static final class Best {
-                  View view;
-                  int score;
-                  float area;
-                  boolean atRest;
-              }
-
-              private static boolean unscaled(View v) {
-                  Object cur = v;
-                  while (cur instanceof View) {
-                      if (Math.abs(((View) cur).getScaleX() - 1f) > 0.005f
-                              || Math.abs(((View) cur).getScaleY() - 1f) > 0.005f) {
-                          return false;
-                      }
-                      cur = ((View) cur).getParent();
-                  }
-                  return true;
-              }
-
-              private View findWidget(View root, DisplayMetrics dm, boolean atRest) {
-                  Best best = new Best();
-                  best.atRest = atRest;
-                  walk(root, dm, best, 0);
-                  return best.view;
-              }
-
-              private void walk(View v, DisplayMetrics dm, Best best, int depth) {
-                  if (v.getVisibility() != View.VISIBLE && depth > 0) {
-                      return;
-                  }
-                  int score = score(v, dm);
-                  if (score > 0 && v.getWidth() >= dm.widthPixels * 0.2f
-                          && v.getHeight() >= dm.heightPixels * 0.035f && attachedAndShown(v)) {
-                      // Dururken kaydırma/translation dahil gerçek konum, aksi halde yerleşim konumu.
-                      RectF r = best.atRest ? Snapshot.visualRect(v) : Snapshot.layoutRect(v);
-                      float cx = r.centerX();
-                      float cy = r.centerY();
-                      // Yalnızca şu anki sayfadaki widget (diğer sayfalar ekran dışında kalır).
-                      if (cx > 0 && cx < dm.widthPixels && cy > 0 && cy < dm.heightPixels) {
-                          float area = r.width() * r.height();
-                          if (score > best.score || (score == best.score && area > best.area)) {
-                              best.view = v;
-                              best.score = score;
-                              best.area = area;
-                          }
-                      }
-                  }
-                  if (v instanceof ViewGroup) {
-                      ViewGroup g = (ViewGroup) v;
-                      for (int i = 0; i < g.getChildCount(); i++) {
-                          walk(g.getChildAt(i), dm, best, depth + 1);
-                      }
-                  }
-              }
-
-              private static boolean attachedAndShown(View v) {
-                  ViewParent p = v.getParent();
-                  while (p instanceof View) {
-                      View pv = (View) p;
-                      // Kök (decor) kilit sırasında INVISIBLE olabilir; onu saymıyoruz.
-                      if (pv.getParent() instanceof View && pv.getVisibility() != View.VISIBLE) {
-                          return false;
-                      }
-                      p = pv.getParent();
-                  }
-                  return v.getWindowToken() != null;
-              }
-
-              private int score(View v, DisplayMetrics dm) {
-                  String name = v.getClass().getName().toLowerCase(Locale.ROOT);
-                  boolean isWidget = v instanceof AppWidgetHostView;
-                  if (isWidget) {
-                      AppWidgetProviderInfo info = ((AppWidgetHostView) v).getAppWidgetInfo();
-                      if (info != null && info.provider != null) {
-                          name = info.provider.flattenToString().toLowerCase(Locale.ROOT);
-                          Const.debug("widget: " + info.provider.flattenToString()
-                                  + " " + Snapshot.layoutRect(v));
-                      }
-                  }
-                  if (hint.length() > 0) {
-                      return name.contains(hint) ? 100 : 0;
-                  }
-                  if (isWidget && name.contains("com.sec.android.app.clockpackage")) {
-                      return 80; // Samsung Saat widget'ı
-                  }
-                  if (name.contains("clock")) {
-                      // Widget dışı "clock" görünümleri yalnızca son çare.
-                      return isWidget ? 60 : 10;
-                  }
-                  return 0;
-              }
-
-              @Override
-              public void onActivityResumed(Activity a) {
-                  try {
-                      if (!isHome(a)) {
-                          return;
-                      }
-                      home = new WeakReference<Activity>(a);
-                      View decor = a.getWindow().getDecorView();
-                      if (observed.get() != decor) {
-                          observed = new WeakReference<View>(decor);
-                          decor.getViewTreeObserver().addOnScrollChangedListener(onScroll);
-                          decor.getViewTreeObserver().addOnWindowFocusChangeListener(onFocus);
-                      }
-                      schedule(700);
-                  } catch (Throwable t) {
-                      Const.error("onActivityResumed", t);
-                  }
-              }
-
-              /** Yalnızca ana ekran etkinliği; One UI Home'un ayar ekranları elenir. */
-              private boolean isHome(Activity a) {
-                  String name = a.getClass().getName();
-                  if (name.endsWith(".LauncherActivity")) {
-                      return true;
-                  }
-                  Intent i = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-                          .setPackage(app.getPackageName());
-                  for (ResolveInfo r : app.getPackageManager().queryIntentActivities(i, 0)) {
-                      if (name.equals(r.activityInfo.name) || name.equals(r.activityInfo.targetActivity)) {
-                          return true;
-                      }
-                  }
-                  return false;
-              }
-
-              @Override
-              public void onActivityDestroyed(Activity a) {
-                  if (home.get() == a) {
-                      home.clear();
-                  }
-              }
-
-              @Override
-              public void onActivityCreated(Activity a, Bundle b) {
-              }
-
-              @Override
-              public void onActivityStarted(Activity a) {
-              }
-
-              @Override
-              public void onActivityPaused(Activity a) {
-                  try {
-                      PowerManager pm = (PowerManager) app.getSystemService(Context.POWER_SERVICE);
-                      // Yalnızca ekran kapanırken ölç; uygulama açma animasyonuna yük bindirme.
-                      if (home.get() == a && hidden == null && !pm.isInteractive()) {
-                          report(0, true);
-                      }
-                  } catch (Throwable t) {
-                      Const.error("onActivityPaused", t);
-                  }
-              }
-
-              @Override
-              public void onActivityStopped(Activity a) {
-              }
-
-              @Override
-              public void onActivitySaveInstanceState(Activity a, Bundle b) {
-              }
-          }
-          FC_EOF
-
-      - name: "Kaynak - SettingsActivity.java"
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "project/src/com/fluxclock/transition"
-          cat > 'project/src/com/fluxclock/transition/SettingsActivity.java' <<'FC_EOF'
-          package com.fluxclock.transition;
-
-          import android.app.Activity;
-          import android.content.Context;
-          import android.content.SharedPreferences;
-          import android.os.Bundle;
-          import android.text.Editable;
-          import android.text.TextWatcher;
-          import android.view.View;
-          import android.widget.CompoundButton;
-          import android.widget.EditText;
-          import android.widget.LinearLayout;
-          import android.widget.ScrollView;
-          import android.widget.SeekBar;
-          import android.widget.Switch;
-          import android.widget.TextView;
-
-          public final class SettingsActivity extends Activity {
-
-              private SharedPreferences prefs;
-              private LinearLayout list;
-              private boolean shared = true;
-
-              @Override
-              @SuppressWarnings("deprecation")
-              protected void onCreate(Bundle state) {
-                  super.onCreate(state);
-                  try {
-                      // LSPosed, modül etkinken bu modu SystemUI tarafından okunabilir yapar.
-                      prefs = getSharedPreferences(Const.PREFS, Context.MODE_WORLD_READABLE);
-                  } catch (SecurityException e) {
-                      shared = false;
-                      prefs = getSharedPreferences(Const.PREFS, Context.MODE_PRIVATE);
-                  }
-                  list = new LinearLayout(this);
-                  list.setOrientation(LinearLayout.VERTICAL);
-                  int pad = Math.round(20 * getResources().getDisplayMetrics().density);
-                  list.setPadding(pad, pad, pad, pad);
-
-                  if (!OneUi.supported()) {
-                      text("Bu modül yalnızca One UI 8.5 ve üstü Samsung cihazlarda çalışır.\n\n"
-                              + "Algılanan: " + OneUi.describe());
-                      show();
-                      return;
-                  }
-                  text("Algılanan: " + OneUi.describe());
-                  text(shared
-                          ? "Modül etkin görünüyor. Değişiklikler ekran bir kez kapatılınca uygulanır."
-                          : "UYARI: Modül LSPosed/Vector'de etkin değil. Ayarlar sisteme ulaşmaz.");
-                  toggle("Geçiş animasyonu açık", "enabled", true);
-                  slider("Süre (ms)", "duration", 520, 250, 1200);
-                  slider("Yay sönümü (100 = sekmesiz)", "damping", 86, 65, 100);
-                  toggle("Saat widget'ı yoksa durum çubuğuna uçur", "statusFallback", true);
-                  toggle("Hedefi elle belirle (widget aramayı kapatır)", "manual", false);
-                  slider("Elle: yatay merkez (%)", "manualX", 50, 0, 100);
-                  slider("Elle: dikey merkez (%)", "manualY", 20, 0, 100);
-                  slider("Elle: genişlik (%)", "manualW", 60, 10, 100);
-                  field("Kilit saati ipucu (boş = otomatik; sınıf veya id parçası)", "lockHint");
-                  field("Widget ipucu (boş = otomatik; paket veya sınıf parçası)", "widgetHint");
-                  toggle("Hata ayıklama günlüğü (LSPosed günlüklerinde 'FluxClock')", "debug", false);
-                  text("İlk kurulumdan sonra telefonu yeniden başlatın. Animasyonlar çakışırsa "
-                          + "Good Lock > LockStar kilit açma efektini kapatın.");
-                  show();
-              }
-
-              private void show() {
-                  ScrollView scroll = new ScrollView(this);
-                  scroll.setFitsSystemWindows(true);
-                  scroll.addView(list);
-                  setContentView(scroll);
-              }
-
-              private TextView text(String value) {
-                  TextView t = new TextView(this);
-                  t.setText(value);
-                  t.setTextSize(15);
-                  t.setPadding(0, 24, 0, 8);
-                  list.addView(t);
-                  return t;
-              }
-
-              private void toggle(String label, final String key, boolean def) {
-                  Switch s = new Switch(this);
-                  s.setText(label);
-                  s.setPadding(0, 28, 0, 28);
-                  s.setChecked(prefs.getBoolean(key, def));
-                  s.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-                      @Override
-                      public void onCheckedChanged(CompoundButton b, boolean on) {
-                          prefs.edit().putBoolean(key, on).apply();
-                      }
-                  });
-                  list.addView(s);
-              }
-
-              private void slider(final String label, final String key, int def,
-                      final int min, int max) {
-                  int value = prefs.getInt(key, def);
-                  final TextView t = text(label + ": " + value);
-                  SeekBar bar = new SeekBar(this);
-                  bar.setMax(max - min);
-                  bar.setProgress(value - min);
-                  bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-                      @Override
-                      public void onProgressChanged(SeekBar s, int p, boolean user) {
-                          if (user) {
-                              t.setText(label + ": " + (p + min));
-                              prefs.edit().putInt(key, p + min).apply();
-                          }
-                      }
-
-                      @Override
-                      public void onStartTrackingTouch(SeekBar s) {
-                      }
-
-                      @Override
-                      public void onStopTrackingTouch(SeekBar s) {
-                      }
-                  });
-                  list.addView(bar);
-              }
-
-              private void field(String label, final String key) {
-                  text(label);
-                  EditText e = new EditText(this);
-                  e.setSingleLine(true);
-                  e.setText(prefs.getString(key, ""));
-                  e.addTextChangedListener(new TextWatcher() {
-                      @Override
-                      public void beforeTextChanged(CharSequence s, int a, int b, int c) {
-                      }
-
-                      @Override
-                      public void onTextChanged(CharSequence s, int a, int b, int c) {
-                      }
-
-                      @Override
-                      public void afterTextChanged(Editable s) {
-                          prefs.edit().putString(key, s.toString()).apply();
-                      }
-                  });
-                  list.addView(e);
-              }
-          }
-          FC_EOF
-
-      - name: "Derleme betigi"
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "project/."
-          cat > 'project/build.sh' <<'FC_EOF'
-          #!/usr/bin/env bash
-          # Gradle gerektirmez: aapt2 + javac + d8 + zipalign + apksigner
-          set -euo pipefail
-          : "${ANDROID_JAR:?}" "${BT:?}"
-          VERSION_CODE="${VERSION_CODE:-1}"
-          rm -rf out && mkdir -p out/stubs out/classes out/dex
-
-          "$BT/aapt2" compile --dir res -o out/res.zip
-          "$BT/aapt2" link -o out/base.apk -I "$ANDROID_JAR" --manifest AndroidManifest.xml -A assets \
-            --min-sdk-version 36 --target-sdk-version 36 \
-            --version-code "$VERSION_CODE" --version-name "1.0.$VERSION_CODE" out/res.zip
-
-          # Xposed API taslakları yalnızca derlemede kullan
+          publish --target "$GITHUB_SHA" || publish
+          URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$TAG/$APK_NAME"
+          echo "- [**APK dosyasini dogrudan indir**]($URL)" >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=APK hazir::$URL"
+
+# ---- SIKISTIRILMIS KAYNAK KOD (degistirmeyin) ----
+#P:/Td6WFoAAATm1rRGAgAhARwAAAAQz1jM4Wf/R4NdACCbiIdV+BJa3TTCBGfSNXHtFUrO3bbudj51A0IZ/qAkrGW733q60sKSzzVp
+#P:FwixMqiZnZshf0OYXkMCWJKZRA+qQTS+YBQL84LAAwJS2nADw510RCfGXcWyv+Ged0DHQfqgEG6B3mn1KNPvxVEvpTzjoAN/naD0
+#P:K0HF6JN8P1n5kxa5YA9I9wPA68/2vuRtoJUd/BE0uWMulbHsPnmjwyxibuMs9N0HsYT+uRKvgGP5coTIog7yI2OHibT+CjEq4Wup
+#P:2dg2Yv3LvQAafKDfFgT/OSYKmTdrOabXe5c7hpW+LHmKjLQsApMvwVaVbf2BYKB+iKL1cMmpgd10DfsyCPkT/N4Huap4uiw0b7Le
+#P:xOKru3ULlJul9UY5w8t4OF51w+4lvLP1kKDPJGBZT2sX0DZyM2RW6lhuChAkY6yRLsVituqJaAWPKY8A1AiJDuyy96pftxGXTT3g
+#P:0hfSGPON5TNOJ7H9NAzfRVDekHrcn5QM3nBwW70jHFi2LHgE+4B7iYa+7XOZ2ZPJ8/r60n/x9QFN+Vq09/C3UFVVCmp80WX8lG49
+#P:P3qtaR1SAqNtCdwb/x0+2z9YRUuIMv39hKe8wWxvGn64clYbvZ+X5R8ICciHjKua7HV4v98yRhZtYsfZpoUQ9BRkO8f+CtrK4u9l
+#P:IekgEY1YSia3yjOVs2v2ClXWtz1wEgE25sGeHeiu8kPxAg2JImJNJgIbcUEsUd+6kqx7dn5QbpS1yz6AlrifTvWY9riIOp1c5jF4
+#P:wr1ZHUoDddQEgj1uFrpYQjFwrW94zMWYR5rUxFjvbj9GY9Ls2vobOay5uO7FI1WOpnDSU7zdK8RbM55SEmGUqIeyxSqeiIwO1HrO
+#P:YFsnGUV2PiC9Vefkxqn6g/oMDY5bevdijLApfAtBeVRPsL5r/WZJbDh44hN5KvrLAJoDZmqeIhTc5OdJ62ymq/6gYmE3GN9L3iQ1
+#P:UEy3EhI/RtgDDQCO5i3X38hwcCezqbTjB9o7Zq+t9lV4hiF6BwC6py8cR30Le6jCzG/WQ3TD/yUADwEuAZKnb9VUmNZ350GXOFeJ
+#P:0IZfb+RX2DR4rEoYTIsUUlTDrjxTIJV3IdNLoWk0wzXQ88QswLyADtEZP9AcBhGvzpc+/ugFHd+yoZltSU2Id/2i9jSyt2gbV6+f
+#P:eqPYDZQY4tSsf7TlCS41gWY7UnWUm+nBBP6eooukx2iAVAbo7qPEUB3uDQCsGxdmUw4G48mBVYUQt+QFCLTyczkePpX8VdUonzdi
+#P:J8vVPyxResILYoS+ADBsMOCpFnASaAqFvUF0Hx33fWZH3Ku7jgwHjaaBq4sYJ2jcSjBO++CCq2KmAiZ+hOvYUkQNljKYinJs+B4O
+#P:MFeBFgY7c9j2x2wm8FqyW/Br62uKIAPsZBvS6TBz0zeP1y68eTG/sigaluiqusQYF1et1sxyktvuD6w/OciLTdi8w2w2+2M1diq5
+#P:hZuAMsT0cN76LazHG7RPPEJKsDhWPVuC5EnpQUIgZ+MMZh1elChdPXTrothqdqJJkVVedpxrN/pBLgNAQZonQQz+EUJhPRq6bN8/
+#P:KRaQm3Z5u8k7sRqEPJESxrtag5v3UQd/m/X/0r6xTC4yQCj1zLo7LlbpvApXkRKKjJuKCYCU/I19r9pUevAmotBcZkNAi7WBKtQQ
+#P:GhM/w9AV2F6NsrW1u9a0J8ahUUAYDmlegpRoe7xxXwIDlUd99Ky+4I/DPz8YIYTGJAIj+aQzmyo51Acu/HubLg/t9liTQ9GWgPFk
+#P:bYqO6+ANAWJAtA/0vnvhM9+TCAShe4u9oPqQShYZGDXOysIaJ25nME51cVxIF9zxRfzRzBmx4nLgwbFOqZFB+Tc5Fipj7teVawC2
+#P:fIzx59ZCUFmM9YqauOrsfg1HIdydmShGxlAMuE/xLiZbSALajkxOMjmEmA2Icw/ETOvhxbINOUoWx4ctd7bhJPEaWsgBXMCn0SHN
+#P:9c+lieVygg/yLjIMbuHHt5zvFdisv54qDJowmluzYahh9kbkpCXoZryzl6Gmr2SJ3krhVI+JvI5PNRY6XjZGRrIu6R5QHkAgit1M
+#P:gjvpui4pZhm88m4N6gYdxJ4xqk70YMdj+MCMo8j9+COe6Pmxw2rQOqy5V8Pz+l6OarKeXvVYYaLz+NtQgtkdxbCybuNCkl2obpu9
+#P:fv8xfg8mc6yH8nG5hrU2sg9g3193dzL2nKqh7nwduqYRpQoZCPE/LWzCmO6R4nKLexINI9GTkhO/jnJBujF4nQYOT/CTrAtaGq8k
+#P:cN4HNVncPjiAd47OyG97kQkm94nSwwS3POJil5O8TfXXwAsERHWjp+b1hvcWocss98u5trZl6lbGxL+MrDv9LUv7dqqCdHjngpwH
+#P:lhAgp0H3ofa9llQKSHPwUDLWAWU7LVia7Tbad9dmyDh6AIA0v7UFonnCyj11aPs8To8FCMouFVuonwfHEbJbyazX6etWj859+xYS
+#P:e+Yg2Mv3YJMfj8PiZmGxdCrnWC9DzY5deqWteCdo8FzHzqocvIuD1vcWr/JgXJJqftqdJ5Y+WKs8GpG0qF3n2/AyIDdNf7yAXC2M
+#P:jaCyoCXoo7pPmzKFX26vjEgb5IHu2cjdYtEEtrEQ9RRYb5Hs9Y4V+8zc0zANVDtCspKlKUh2wOchTXbN30W5w4jzGGORMvOHyO4b
+#P:ngaAOmE7B6VmFw/TiKjk9zU/vJ3dX+iXVSNsNrmuE79mLjuZ2Isd6ZKakjPxlsF8xfeXbyEIkrSXZNsEtYD21ahRFnod4heUAst7
+#P:aWFuG7NlV5eZR4qtIwskkhmOKZAGofJ1jXWNVHQY+mANdOX/xcVosQ79V7IaPdC1gtWW3HKF/bzFXXijJu9s8BNjDu2KN8K5jsSa
+#P:1Hjdg07ai8+Yg5iWVkw+Iko6+VS0LQmG/HwZxKL7Lyy2/K2e0Z7ktz8bhy41GtQizgBZFbb1w/6KzLsC+oGpvzJGUF2j9J2Vc0/T
+#P:/OMV1Ovh1oSNFLPxirbMCeg927kDj9P9uZTABTGPJgqOp3siQxRHv+MnbTJIUWvJGIkwTHsKXXxbU2/c8Zqtp2LXeWA5bcgEy8Tb
+#P:mwCPrle3radD05dvT27ugsbiU8g1W6JPadgpEQtGK6sJ+w53o9RxRoqmn3W6q4/xVCslNKkqoRX810bwgoooRxvydDl35stlTh/J
+#P:MMSbEuiUEGYbC6lng1O8Mx0JnO8EgrRyfFmdyYradaU1lPZkgUDIkN0YT6VfKGIDqS/T56BSHnA8siy+BpnOdKyNJsG4QxKxFold
+#P:SRKg3MNpfLWzqFIwKWgwVNA6j5xW2P0BtwqIPEbQDjO+KLOenyb9C7kpRDKp1M/sMlxMMJHI0aRX+YihuRdn0Dv/6u7JnWVbp49R
+#P:dx4O30yJgvn9ty7beGOfSYguP5hSUhXFLQ1hBUGkrXBMYzwbxJVJAaCuFXI7BrtJnsu5o8GFuwgbQPwYWp1KKe9sGll67X4UjYKt
+#P:2Mts2eHzXgEG79iIxlrp1Ei5b7GgcRSgfYeTNbJAk64huISIZh85TS/O6hk04YqHhrkkrwOJxD536A3SxN/w/DfdmTRcnYR0+yqX
+#P:IgyxtX9CY/fbftY+DxTMSzyMig3xwj6qsQUa2fJ9eOGIIZNKOXtjzrQuuEHTGH+c/ICbweCItEWwdKRGKnjRKbqpIURIqlLCkven
+#P:QZ/IxABcCeuI+SkWPn3F58LmHMsYe9I2d1WQHqYgM3ly/dMUtWkDG2Ac0Dp3KyaT3quvJW0HNCJb4fhGxg+zg5RmDtkGdnVEL6Vl
+#P:sw89lMg+oVjMeiIJkPdcKGZKP5Tdj2OuaftpC8KU3pGyyNxDZkLf9Moshc0m/Obs9++i3F558UouGyn1QOIxuvsBRwPW0wyvv4n3
+#P:wuV+oiL1kkZrzlfmXX4MYbnofxTGK2IN8KwkeU77fSm2O3Q3DaHREgSV3wfqBiwhNQoApgx/FXywUNY9JEMtFdxNkmQUGzMY1gvH
+#P:DyqURug93YlLXXb/rmN69PlEfHEGczATPfTqqWIuv4QS4ZSCyfhV5UHTrdE1UnWBHaxGPTqw77o6pVcg4D1MRRvaGM3t5XflSiKw
+#P:5KHO7GrxySNVD8HBJVB1Zs+qDbs8PSzxw82IGUyxo29i1ZVSo2cpyko0iG819pgfOgsdwWnKMUMMyoXK9JvYSZcJd5oyqlbpY8MP
+#P:WYgSGLR2Mvvd/4ycFIfeK0P1DC53oEVvfsy6uZnyds51Vq/PPSan1vgKcvZ3gT6ih/w0d4hxaNDR2v8ODtNAHBqTTiP26wae7nig
+#P:ynJqApd36XfZUIHnlbB5mLPbb+JXz5LR81cce0esJrFatF3LTi1sx3bWg4O9gjkW5QXOUJUTw7OpjucZF7rrHia2YrkVe6rA0xY3
+#P:OuUHqsDUhWpM6u4c+/ZLPmvERc+O5Gyf9dShGvVlPm2Lz0Pjzf0SAt/4qF9eIqi6xJf2cLaWJHqqmLNMWH6rzI/FdUOc1l3f6wH+
+#P:TTf6nWWrkadFftCJDDgHEC3QNFiQfx9NZWpuh8FaPnktv3bTQHu35pthxgYaCJGYizLVZ7KSZbF8AfipqL3U6hLQoTgWem/WwAhY
+#P:FLkzBL9vM2hEnQlLYUL2ab9r/0lfIKoEXFT8RdSMOX/tpfBy9rvdGbv9q6WNltZRu3dIuwHpf2KS0CNswOXPf3IMDR4bqMSmrraF
+#P:C0Y+ZX29/QY2ws5qG5TeFXflGyOMlOwV2046tPE/uKWRHXGs9iPtU8DE7DGf928eBga69d2JscbnE1HdFMpK53QJ18U12HBGCb3b
+#P:GRBBoHb+MIGRUv2XCi+5w5kx/mBVH/p8eRhYRk4VU6YT01FdXAHvqsGYiKm9hNk0Xg5EJKWCluArvqHQuhpx+X4ndVHumSnFD/Nj
+#P:KcDlVWBw7I9/uv85teaKTRbD9/SSKZyHDubd2qYfXfEUaCHmknx+M0xrzpZvCxkHwJRfu31TkXif8AqfZq2CWpfFeftkG6Xmu8So
+#P:zQZgylnzyOpsXoZRH5GvXkSUmbhsSzcDVFsxBkKyQNLc/wZXXyGNiYYP3B4EVJBWyEOZqM0wqxoe4Z3vfq0bMYYmrCqem65R4XFr
+#P:sqyAaMyNYYubzrU4pG5j2oCO4vRkLJAW3jlntxukSjVs/pKoGptP8KQpG0ulfISMMWEDxu23CH/61sRRNQQGHChSqYye9ydw8LYF
+#P:qKbuXFA0u7aLirjXAhIA7xQOb0tjBU/hBSz9/ETKy6/LICrQuq939qVDQpoi+uXTVzafXlJtgfSjrBFoU4nrzmvivv2anSJ/PrWW
+#P:XdAb4/w5ciOW4rOfFzl2cYsBvtAS+8LiCcZgMIfFM6BRa5wwk3m3jUF2DLtNfT6byyH8Ol4TD8tVmbJpG4WQhD3/Fn3D5SG/1Mlo
+#P:Y7O/gvUAa6NCkgL20P+azD2s4RHmNDQQKcIa/XR/+x212SO7R0pR1Cmmej5cJmvLWcF0XLHv3Knoxrhre+fmdcjI8d81bCdn2tKr
+#P:U78YmR1BUru+y0OKGbJ2/ahWZQYxi0n4SPl/iwaF0/J4n2BovtK5B/LtAX6F486HV67xiZXMQzFiX5ASZHi/fcnjaL5cHWTf1Vjq
+#P:vt4JmEreiEsZg2CVwxZYoxvvw4A47BghSQPmtSok4t3cy8iaPtVMwpRedLFdmUO9tpwpykqXGo/UyqJtkxTJturkDxRv6J7yxDcc
+#P:j0BK4bygm/af3WmQL/dXx0KgE3enhu82Lc8w9KtjLgLbK0DnaQJ2x9TdDFX8EoTAgVoZpjDHUoj3jtxu1z7RrQgh/LqnR0YjSB2L
+#P:r+MWdeEU65Wmgc1vG+ILD66iyzUCvFHC05hp7gk1M1TR1mhoJVP4Rs1PrnYYCPLVW5FUEhVhjLGXkw/7C7hQv5Xj+g0DVj4ZCtG8
+#P:wYwVuP5fD8NOYlAtstpAf2Om39j1FSx4jtTdilTLEDatvzQzt1CtGVhA7fHRiSHjAWGMj8ptpnEobMH91geXcdp2M25z+qA2GGU/
+#P:Yr6SRQ81HKAX8Av3Wn6j2VPi8LUh7XJ0dlatqG+CYMxDevSF3mvqH+gVOP4iKC+2txUDxNjHVvPduFX24rSf2S4R3AHjmUaaNGwB
+#P:69/zzi0stvz/O3IkAqT/TB+KzFkiPSMdjf8FK/VDeFgM/ks9MhgdKEOCUOVxO+Sq3ovDFxTtwdeWqQJb3HjbpsCcGN7nnwvV2to0
+#P:uET3NGx0/y/JzjXmUmj7MuXi5j89UQEVLS7BdNNevA/sojVorXxvLuo2OMbkPAYuoZGOP0y/1bEGht9Qmi+AfFR+381SabQkMbWg
+#P:WOSloaJ2QMsjFl6vYPGjxD6KdNMnmeiIUFBwgrTjLDiqnwIyMuPIdensRUyS0iDexRxhlGGsNc8FlBWmiPxCn81ig0eomHXqCByq
+#P:w8KsyET5hpwYrW4iznUdsr2jyoVxqfGi7IbUcZVkAzDWqv+LHB8BojHFrN2rdLA+hFChLG8MI6yWDMTU306z2qG5jsnsMHylb0jz
+#P:WVQcJ5GL7THRxvXvXcFpxzOu+2j2XzeNI0FBjWf9bLRJSNnDeZM1XXXjyMpUHE/pe/Z/tyEyzVHssvwPpS1sNj87H63+jYf7i0K1
+#P:dZKUm6teSN5j78edOV/aHDBvQbif9AUuNkm8N+5XjncBitIiGlNnqUdWC0A/NzUViy5xp/+5KVJHCfRFb+gC/d1yBuU+OOj3i7/T
+#P:/LhOGLn55ffELdg6xv9j94J732YM3berWpOYNizHwJZOoCh1pqztqxvCXcPE6sX7WYRbRE5x6OhQea1AjnIUhCpKndRE50yOCOaa
+#P:nB4ecVF7xyGtA3gqGGTQY0FexdBOp+Q/g6ODgdnOuj5EPGuzBXs8bW7+6DXjaHGmotqRemxT8LcC+CGnpM6f40bIP5lrPmjJsB8+
+#P:GuvAyhHN+K340RPhBQinUCSWzP3iLlKG0mmKIS8GeJ65innucfdv1SSGyZMORq/jYn9/to19+mnza2uS0yZ5FzL9VSD8yv7TV6TD
+#P:QctDre8InOUusc7d4XYO0dy+SPhNA5lo/t4FFYKtsSjqXhKRP8qykWMkj7Q0R814xBjKyCQbOKwoHxXtta696OlnpLftmaQQ0lYW
+#P:4CrIbxJsq6oA52YxZ7ioGfbSYyIB5H4FVgGKcl7emJ/iu/PaY/sIFuMdFocqQuOKHjO9gFh94rKwkGFsGrVDLCGQd+zv44wgsMmU
+#P:rwQKns8mdzDMTSE9CtUfNVOrLRdA+frISYES+BJcxK3Kysc3FJcvY1ZevD91aq4fLsV4QndAVs8ochWK/CsryO3hxF540breqI2M
+#P:Wc1Mqufxq4+xMPPaY1o62uotruqKex7j+IQLQKYolr7oRcZij2zOIbD/yy5aH7Z5EySJow9o47Lob06Pc/4Q9f+yqXNyqpcR5yjg
+#P:DZ9k9pamLmu2vf4NEFycLPhQi3D0Z/t2d92dDB9wHmkGLeZ2UG8/YMfcxz8ZIRP4jvotYwcylkQsb6Fd5NqVTRPb2uaah+suaSJQ
+#P:rvfM4ydUiiTCZu7WXzf5zIG9vr2EOdqC6gnO+iWrbQL9ydh7svTgHdzBpcvFklEEwkSG6odSkJ0yHFQZKZdYyuexIuL+6k8FyVyQ
+#P:RLLw2X7c0zX90NdlL3q8hw4Dgp0iu+gDwfjM4hFM4hfvqxjs5i1mLeh7VrLpAINc0wRjhr4xnjkj608WX8Tim4QiD7xLqy/7nxoh
+#P:0qS6TLH+mupGJ8WSkqY5kRySslE3nX4ssc8M88AVaC2bZw3yD7uLvEzS7Lp2/Ae1JTMLtk8SqmJ0JY+Z0pm3/406FFn8i1Cs+8bf
+#P:Hvi/VuBmmBIoBiKiP5GZUfsVpRwcEZIcrflblmD4+axnTo1y0dcQo1OvTlMgN7cLLyTpWqAKL3e8T7n9ayq8jgbjxc2m4cL+v6Ye
+#P:0Urj2PcBOqpWCLiS09zq2pAVQgmHdM5Moj1HI8maDPRPMbCnxDyQVvl85YsFq0MSJ/2KOx7V0xqHMFU2CzG5uwH4eSCYNDQQ7m45
+#P:Pg/907kxzSiAtuSTfKHzIxcei3hykXM/u+5Z8yzNvfedkwSQUEmdmPKbRA/9j5VJ8oFvwfrlNkwa00iGVAwO3Umq0BBF/xJY2NSa
+#P:Q+Jx+ADuhOe9qNgzKnBQHgLbhdkkkhyn34oaNjRfVX3vK32Gs3HsAO/vFSI5GmCRVC2DO4P3KtJREski8BBs6NOpRY9Zd+Dg8TK5
+#P:m+3/Rvk2CihitspXhwB5BpDtMPd12B5MqEteWSjG3ls2YexJikrEhgvCobzt2aD5qAsVfyNvvQM3GqB4S7TJxHy/b1SPnYxpqpkN
+#P:TjIyF2BQ9jybdpCVGPkDAze2j87is52JQleXMLb6Fwf21KSxv2PI81cInST7lCrhwPJqSFCPCXf4DJ4dm4eOfIzIvsGoXFElkAf8
+#P:VJVd34tpxV4HgZtrDAIC6PiSH+BdrhEb5Vi0Z0D9d/7SZeNX4wIoO8Ed+yEjLCbAQQQ9hbWjlfsU/v89K4BYGsUa/baaVqpVnbmr
+#P:pJhr1IvT/d6eX0L5JBEzpT9A+PqPdVd7/B305FSkh7kzJXUp2QSbnICYt5TBYgV66L/vZZ56boTJUsWBV1isSU6wBhVqNR3/ESXg
+#P:+cAlOJcPithGgYDBV+0Qg8MjkHdR2kFYiLjHKxn8gHZFXiCxPGm1RQ5wRE86SjAECvm9H2jo+9wB1ulKQ1QEqOriM51z59WdioOH
+#P:xxu81iRXWSnXwGTgILFoeS3oRsVhHjOeinrFZ2Dru+DUK0s/VboIEfOGlPAppjQgel4lhYwQxqDUPFG6mUq6jMV1dn1xghnpUVKu
+#P:e1Eb01wdIlToS1Z+1j6t6/z51ziT3Lp9GGxqRlLsQ35JnScOHciqZ57/XND5h4SnFFh013IoyasBD08FHnFcxHg+yU8fqCLWGI5n
+#P:X20cI79ZPXlu8xKIHZVQpjyJAmfWzl2hFQ2YZd+CWT6Gk4l2q94VEwFvHHOh7vGXJwbuuYoA8xD5p9LwyBi8PpqdjQo/2BP1P3+U
+#P:9SE0DdN2Px5EjccFTKWKwgO4v2Rxb/+x9vDlyHji4XKsdkuzW50RlTZczPammvEQfgqB8edmyRtpAH390egZwCYILXHqZ7YXdcui
+#P:xyaNBJsm6VEcyHrWaw647vM289PvcNHOHGMY9X9wQuqv2VIi4Lnh/DbjfUs9tpNqKM4PeI7zMuMUgv5Yn/dTvIcZL/mjDxNG4Ygv
+#P:HtYBnO4Ww0v+ZEdaqnoIMQwAkUkg5eMP/RyYo2V5So83qUyzASMRRKD5n7vrJZ5Szh84l4xgysqI09JZnCyCsfxKrR9RMbrl3gJx
+#P:A9S/+rI1qvu1rIigIgMWXVekPRSIPGoxKsiQzPY0s2Ulh9oCEauWyvOn9CUTZ95ZnVvYhkQ019EbS41JPAlvKvxNSjVKFoU8lVOJ
+#P:r/chc5Xdnk3HxuIv/tQsrU/4eJOONM5tHq61gI0d+hnwQBBt3R9dhKEe4NGsiHx/vW/WXBsS2UnXBBVX4UsRjKTR8w7OMARpDQsu
+#P:olrSq+JtwfVtKPxTnb+FLARTXT9L0SYV2UVPpf/4tPiHdT0fcMOUhq7SyT+m1Q3dLvq9IcFwZPvI4l3hk1iGGVncGYhOlME+vMeI
+#P:WXBCDOYkvqvwMJ2IGbsbpGLsSbttFoE87MJE/cJctEPHGDO/tuGmN1DUr3FMiojLqgWJ/04Kge8nsaZDvntb3P5QNzXW32mWSsks
+#P:uD/v2ZOq4IutSp+CPZz/8aTxAeHIGAfQExfSsfdqjQS0xW0QNpUV1WCi+gWS4Dk8dvm3AOU0WqYuhCg5rt4UQYPdxyFipsij8QF8
+#P:wKdOKkCgcIs2C3tybNqWTJbaxj2YKPAPUQWNG3L5UbRWvzw7+0tKEkXipuHejWXAuvjO4CLiJILOJchNRgfHT6xBKFHJpxT1G2hy
+#P:gM13I2snc71RYQnov+8oTIDwG+PEXRvVaAEmQNuIe4OYzX8D2D9vZh1mxwWpnDESEy9NpBUHjWnG2ymoT1il4AmUFV1O+p9RK44/
+#P:/xuxgMttSAqf7Quh+ZYPPKBgbfbRS1O6RrOdDrx6+9uZKn3Dkvr1RrVN2767R8JDplv+n4lWFW8JgSim9dDjeiZ5vrZShqp0r3yu
+#P:byh8cNs6DMEc1ZWBplyPCWtQaOJe2f20qI3O+ZeuMLVStMXHhQey/kB91gxKBDj/k5fLabam+VUFEnGDZ3PGmgMOXFy53wKoog/h
+#P:1jsx3d9UZNh2Cxuf++5sa4IgwRdBglbk4LuifX2RZhAnrHX8ZVDYRnD75Kf2zPpcCki4HXw/pOBIC2+oEOnBSBU+UgaGzQVSMGW0
+#P:1b5ZFhPHE5mRju27H6sW4JmRWvLPMvDWLf32mlx5Uzl4WFrUeg5cJZoDysgq1OmqG3Kg8+bF4zAUO4DwBys+MFC6MEj07VA+XYsX
+#P:8WyeeArTMDsxrrJ0yYDgU+Eq8nGUylD5ALF47nlbfXWD3flvE7z2UCyoxnMTTArJ9AL3TJvCeT42wphx04DHI+lw+7l9jOsffKXE
+#P:bIi9d6aY9LS89BsVtvSiRjpzP+wxcrkv1K8eZ1FJoQwVxollN14F3NkYo3sBjJNdFraAzlctcAHzqgPulxgzoJ9sOUCoWw/m6yvK
+#P:t1plR50/4uPj25zxA/IhotjEY3iqsi9aITp3kng3sYzCosj2I/E21HT2aajl7PFrYdDP0V91uMPKNxkXaED/Z/GCRfcchn6zf3Zr
+#P:eZrwhR7zSZMujQriL5XDup68HyCbifPtQscNndqxlp+E9T4+gz0mAQnHX6frhXzmDw7sUJIeTQIh/H8Lby6Hj1xhWVPpPOHyjmNC
+#P:Sd9k9+Oc8YCAmOisjyES5el2RGpwvF6wgJF380KyaMRJ7CQkMtR/h4CBVIpoVoYTcOJNpC7jMso+pkUnDPJpjiWWhrbCspW7DHKQ
+#P:vdrK2Ui+4giIfSKsL2M6zMg+Zt3CEzoyuUEhd26cJqai5YeVibmAnoT+3GiFNHRUPRmiT2zmVgFb59NIwfZ/lMYQ/FUiHPsaGeKH
+#P:g13N3prAqYOi5XJxX23qrwwwLJXmzNrZKOt1MwVz4RbYDmlI2grW874OMwsbYubZDmugtIl3bU44hR8oN1bq7eC5Sng917Z23u1q
+#P:/c1WM5EIH+EwqsmxGcvTYXE7f4VB0k9/OgFeM9mrBx4RJQ9NRKni+q+J1CrcpV52rD49TirZzX3IMmAKTLIIVdZFI2YDNVFj0kr6
+#P:wq0ZpXRIgdd3ub5QZv41V7DrfWExmBnKsoZxjZhXIRti3TzRxbKdjA4Tuy+Neku+rGp4MeK4LewdALR1SSuAtSs2znHAiSRcjjzz
+#P:s6h0Jeuu35QJoSRZPjMmTub0DQ6g7Jt8TJqzwG9kCrm/y/d3mg5Cb+18F500ad2vPqxKTCcPmAve1dStKSreFzLPEKz8QUA0j4UQ
+#P:gzTeTNAQIJJL5kNjuHE2vvdfTMxcGIkaf9phMlp02ak2Zsbg42Hvyv/YpTq8sU0ZKKYuB70YAHVQw19NrbJqDmDW8h0isG/nYoez
+#P:EVv0Q0Y2O9+mON181IYy6Ce//EhLfso0XQeRDCPzkfnpEXq/UO4/9G0uMnNTegy52bDmcXOw3Hgg3C5SE1Q+3MS0cSDgQtufI2yQ
+#P:jMUYraUzME34mdYYu3Is2OWgbG3a8PtPn9xbC3lfOJhBDNlfmA2/3xksgbiSVz15rck8/KV+wuM60v9nXnyqSkPICFZLsm2yf+BS
+#P:UO8CuEwSEP3wuwvBde13ibtZnHpg1O+sJN0hU7foSB2y+fX6SYcd15olXdH8Q0L8qV24HAEJylh3GOo+oQZx2DssSZ++kDTJ3Jfr
+#P:reDTLtNk69kbeWXZUCB/8EZ+l/vGYIAXvbMLYCPE46LpolZC6GCR4/Ia8xdAUqCql8kMRXxwsSQabIbuBGlC1SxERePuGACDJAWo
+#P:piLnw12kTF87+7+FC053A2gOZ1hHOk3cPwkndJr0IhNXKazDholOz4EMa4w47ks+IeqvRaVg3Dwc74bHh/QcLyN57YzkLUJrwXbN
+#P:Zzfx/uAYqklA5YGOSI7OC5XNfwVihNgRXOxEL1coySbl6THOL0gVqQd4Fy5igz3AJXYn21zGTNr2QvFNBMSeVuCbd9He1Tr9hwID
+#P:Er+l+cRfXYad2cOmL/xJWzXbEy645I2L3BP1ikVz3SUdJzItsLE2N3jpMltSpAu2QPcOOGyO0VUUyHBTTdFlFRnq2aURqadK/IWh
+#P:xZYcCgexgRlfb1vyDk5G9h7RwxszMYwWcWIz4bgPbG8tPVViTS+zbWJIehMqNJegJdPTD2jaVad1K8roEYr35vu4eeiZ8t4vgCgo
+#P:zatjpTZCfX9owMkpNU60JnUuxFxOd/gDdnppGEQrHidkk20pv/VTB/+wPZrQYiXu8BerKU8JMjZCVhhA+JfwkLnCIIoRiOP8O6hm
+#P:QLP2qzZoG8g1z/2OZaqolwet8SnhcjYNXDmZEipYQMoS5zve8yFkAcQcUWVJ4+s45v74xogQB2A75VCGrdJu7M0SeDfIyWkyX4s1
+#P:UUNq5EKw6KuH/HYFgznpcuRTyM73oKutmksbSEagR5CqeMgJ1r/ZH+HR12KEOQtZIb8bwy/RfHGwq4SgGgNTssPBn2eYw4JWLbe9
+#P:2V/hDYV8ouJUdDV+6Rs+w0AeqB3h1uAtuAKVaoDqGbZVAtMxfXJFYtFqK/tLEzihN5ewkS7Oxz2RAF2NAEzFVyPtHJEmqyoLumgw
+#P:4wo9btMGykDR3n7zDVqQbwHE44YVOqr5Hz2qXfFIyq3vPQjffnCTnW21jtItxgPI97CVTIkqRLZVe/M02v/qQloyDZtHW7Kwg2PV
+#P:ZP3WLFgQKIK0NKTIKL+zmF1eeJC46OSlSse9S8X2zWW5ooKBNN0JpWD9MVdqh5mSloeE/aPD6AXivE6/V0JCeuGjOgpahcJ7vH4u
+#P:sIeFZ3eEQzF/87syNEeG9WZ659f2pIW9Apzdgs1mf13MZDNYXT6pv4aSeshxMUqN9ccpENxs2p3RqXaTgyO4U51NmzMbofbt77ES
+#P:r8xQkICekfszPOjVPNAYrZhoxoanyWtXm9X1WxQ+7joFwmMvgzPkhGZ6ni5WCHls6a0X0meFvz0aq4n27X+Qq8UxCHGWhVh5V2cD
+#P:zJ4xz6a1nZwkVw3CA2imeFrBvrJjTNjHzhGGxAAaTtlYFGlMsDIYgvs+KbEFFGyGVtxTnblfBnE/m2CUkuBEPz4OOkx1+zThbShk
+#P:A9VOOWyQC9v1+/fa9SEbh28N9ERgz1Sjg0/M5i40IGFmPC2Ite5YCm1nV4N12dyRrse8rrsy3w0eTHPl5YRHG1UlUIOQvqikc8wM
+#P:32OxzPikhFY2jWt+5iwlRVs4QazaCpAHhAeZxKigOc6k0WVUzXbYcq4RF+GoF2CgvKywAIsm8jYQMTftQhoKe9SDCN/2n6EFJXsA
+#P:ar0dY1zjZfH9QPA7tJmJwsKEnPK578vKM0cnersNH2PxKfY590RKYggE6bLAE7tkZWudvuDIaJjX9zTUQWh77enTpcyOnVjUM2kt
+#P:J01AzCLE0eNBRjAzV/tnkwKw4sV/HvYwaCLberECK0Ow/2TT1nwAxCr5mMtL8bBz8iSWd8xpFKZ3WyFYZ/4m1JaxAnnIWu8LVEvT
+#P:j+LCLpVlmkBFQCFeLUF1imcPrkpkJ7Hi8Fw7jvCUvuQqAto9vNGwky9wv1/SfOeKPKDGP0CBtkoovMn0hPzqHzEyXyaQnDf10+AP
+#P:Dtw0cuCLZB3zmwohs0NDqIPtE08xIvzKAtGAnd129bXfgrA5z5nJf/hqJvuZQw0H2A5JAVNcWdqoq2g2zZUtpUluVEiIqWW/ECrn
+#P:Cosa6/xgkKTdwpYsWQH7B/FQVUDGc1LGVEOVSvrDA3Lot2Ih0fj218O+l/qvww8RdE4wphdhBmbh+4ZYWT0DRlyeXBWaCEwRbEN5
+#P:+shRbHo9pbD9eIx+RrveHJPCkfAFz3RiPUfvEV3A6YKCN9fW+Y0wk9uz4QEt4y6uzM1DNNpYN1v8yLXOvjZBbS/Jfi5VjtlAzE86
+#P:but6IfVr1y5MusJvig5ZURJdO0c7FZtosT3c8YQN1ZetpqN1G0j/spyaADW664kGAoHpIstSB7ybp4lOym6dgPlMPqqipv5hByN7
+#P:CWgRL9Y7OmcmBJ4BdrCHLzsnrMvUv6up2aIeWrmUFrBydBLOr2WRkk/x0sT7fe26vTg0ltYiq/EOBq952o6a4aZEqYeR24GbDWXE
+#P:yIj5+iuAaTJO4COUnyzsQtUuCDceIAeKm4GeAHNpakCBlh9tlK807TodfixoLW0NCi3um9+nw8wf68IYm8iEDNeRwxmDktk8TK0W
+#P:c3JTF3J3Hy4LgYBmbMX1smcOlXAySHhSC9Sna3HY+xJL4qHbGBQCNBBxx6j3qRgVGSf8f6Ilna91ntbOx7EBs/x+/1EQpSmqsuCC
+#P:BYdv495T3kAUtsZibbsDv8Q3KPmHLkfYBST8KqBlCi3vX2Ro14g5oCQh3/iLv5cjZkL0bcMOadtMzwQFMocUd7ZGHFEOfXjpHjTQ
+#P:Ap3z7PcMo7SMIWmoIjWfpl0gDDsuz9YX+YTH1WIZXJyYWl9YpMcAMzC4HRFjsCvo81YLIDt0NUSO8RufsToOSX3Zq6P+R2dwes50
+#P:/QU3zCe7SGQtWsGq0IEO6ybURwszFGpoYc1Seal3IDR2oDEYI+AZx8S8pzifFNQL8xSuAduJDh/9lOGyqIl5GERAFbEXlNCHIMAu
+#P:k3Q9m4Z+DUYzm1y82NU9cZrIxInXD84lD2TSMLWs0clteon7zU337o86tOryU5znAPfdslrzPqwS66+/7I7CCIqvaHcuoQZvORox
+#P:amtGdZ4UPawmMPnvAVdATcIpyIFVFyCrSt+xES+lPDq+uPvt0jXVR+9pXo8eLKFnih+wnveMws6C6WZU2vzqZFxHzKZFiz9va5B7
+#P:6XFXX0g63MHzCqPA8MGvvGBCRuJUfgxYb9XARu1bkXkqIg8YSQX1bU+2l2PsoeeHtSqRE5PMWywrre3HNKqrbkTiqNgKjuFCl6SP
+#P:fgEENSzE2WjPLQCpqSjI7l8eDPLvZNHYDulUrMs6hixV90J7mteJN2yyHGqzQNng6R7FzbA5C2pbzmd7rW2ey0amtwbgps5ZUEa+
+#P:08nbSnBnEIMKNnX7HV/wS4QAo9fW+MVdKL2yubFK3ZM4sNuvFIIrYpR//eV4mihYi80CvFu3i0WWYwDys9jNdrIXLOosKGcRQSYu
+#P:8f4ggDmQ/3ZNZLPj5fQwFRwydswbbfjDAAvLVqqPickGKxNRaDv+mf6IZeMlpKyhkHWNvH4thbe854QLY0RQKM1e2DOErKWuNswY
+#P:6EfYKWHgxr2AyA+HHggHIgNoZz5vLUWEcPa4A0riIq3NJZ0UQTWkFh1mY+U13FvIh/kG2BtvKcXXL42eaFPwI5QEg95C5q55KGoy
+#P:LorSfEQyYoobEDnjlqTTcHZpPZlF3jeBKXXnXmF7ndf9n0KvUtBnLBaUlMSUgdd17sXmdSw2FqQnAIs3loyi0JISufKwrUOYGhU7
+#P:u+mzvO9wWIO5PyU1Lzu7dlMuJL6gy1H5pgapBArmRDB90oWIYHTwWaa3CXPCr34RnKqYlOC/geHwmc/9zWss0XJdcnhgWjTI8WPf
+#P:RXB9boGb8AotgLjvhNMtD06QZ/ZtGz2rrADBiQEN/eKAcfn2FJNnjNWBPW4/qNWUdM/408ghacMb/pzBw9hDXPcxZaO+bild9loQ
+#P:WMzbjCUqHVEO9+CKS4wwpgnk8VRGXpMgWdtY/J6YWQ8lqP/ZI3OETKJFT0KwGBTAkp3vhrqaddYnhuVS+qesdye8wbxK9bk3duyJ
+#P:m2vYE/iXb8KAlLTV0zc3NQWhJJsJ0WegE70Jw0Gvf369ZP43+NFjnqE07OlJshkhPVh7an/nezZgp2pTPZZ4exGlgCe4IFDccmuV
+#P:yfRuRb7d+lTG4wsSFoTKFzulFlBGKS2zlc+I5WqZEAkYmDnIE4+RXfut4ZLApklUBz0OYUd5lgw3Fhrh1nBVLJOZAUv08ujeg6PK
+#P:/3dHWZisiecc1K2Jjwc+4U9FINuu4RfdE3DMX3kfcQUopJiPCr+oc64LqpG5rKvJ1iBTgBA2uTKzCbTq7xx1Gt6AuK/ygGjipH3+
+#P:txl87ox3WN6/IzcMRoGtxGUXiJrf03gC3hhnceuUoy0NgrrW/doLle1wywtfZNpGl0PT3ro67xNhW96NFwvLi96HTVUxyPxRHAw8
+#P:zORGhuyAUQkuZ7Lm5swCJlDsznDInyjIs4ialyyRhFEerXgionudsS0W9ghFGN/mt6oNcZbQTDXwEXJWtI33r8+yj5fsBIUoJ1tM
+#P:UE9CCtkyjOM7a4yQxx9bvJHfamXygvP9QWywZLukgj84JH1780Qo4WINirI/GzvIoEBCBOLtl9uAjlfrhI9KWfg0j0Wx/P+Jhxv2
+#P:e8bQY66sWFgyQF8/KDRJq+l/W2RyGRqLxDvYSiM+RdGNm2zhgjGXNN1z4J6+GtFR2qCMqZG5gD2fAw7d5AtVoEKhel/bg6WlfdKd
+#P:Y3Ruy3z2B3IP+g2ZPaSLjRmBqTzQ5NuaMHYqFQG6/FIelVHHr00h7Q3TZewTOEe8bV/YHhPqsn/9Ptt8jO7M8xxwGKpsXpglBkxu
+#P:IR2puZeJ1Gs01ZnvhdrYv3CQWpbUhY5qYriAHQSTkO9dQloZB+vQ2GAuKnA8CE4FiWu8eSC3HBpiGGE4TxVi8moA+cWYusvWD3SY
+#P:ybCUhjBndFlIiExSX+EK3UPqLnVnrqhU9b8DRfANLMqCm9/2h3VtO59HtqYbv24o5IsgHiurNWUZzZuoqySABbLYQK3IFxPg01o5
+#P:iZdz5nyPHdnlQW27+ZEVJFGH67eeGkokTh6ZWJt9dC8UFaTZ5ChkPK0txHiIVtAUXHCV4jw9BMslRZ8MmWVqZt1EIPrwnBlHbOd0
+#P:0o8sZT73miLqhsOd9CmaBr1L6eFq1OLPDpNy39nKpdGn1zESa8FFl6NDaRNgPWTXk8cp4PrRWsn8zckDE53BvLms+/iCMBgMmSy3
+#P:Mzuf7Zq0E1aZSiskVGNKsAW9hVDDgbf91hoZyA4DYYxafCM2c+zWe0ZQtMA0Hy13Fmmd/RXRxYmWCZ2dfptm9RyWLb3HPrxnIjRW
+#P:YP0JgG4ym/7nlxv92EVtZPBWSwuFh19kFGbwsA7WZq5xy0UHrWE1IJkmTN5z/+vGLTbkSJdgQERtXA4HA2p+8Cg6/unrfiUvz2d0
+#P:POYwrW3eMBumqq0BhePV/Y0XnFmk9E/A3nevs6wepkfg8/FIeb6CsGHd3tDScts72x62aGRxN/C+4iSHkCcBiHC19u3LcyNQ5UxZ
+#P:mNS3jQ8shwz2piancAESoh74XwY2XBkEUV07jsur1/oJFNF/hYg0vT9vAxIsUH1afhiLgd48PO7MUavF4pFj7oGBSyHBVCxuYH20
+#P:AxUhWRgP2DBX9VStvyqHpehb7YrV11uXtFD929R119DiF1Hv6pPvQRW/L6Clxaj+mns/ts+0At78EisXUCXm//VXDjU8qFi3XVDF
+#P:H9GiVB8/Zsa+GC/ob9GKoLe0YHPtvWtKObDNw2XQr2faH2DJs8myRhojXu5ixu1YFFs1krTqUet4P020+o6SIrcbbykuGzr2jmaZ
+#P:A/RZd6FnHoFaVZiDROMpH9raMlA4Z+jRz+rpI3VNKWl6IkTLj8LSr9GlEp3Fmm1yMsVkp3D3/E0Ra7PMgoKz6OiVK+goNyot6Vdd
+#P:Tk//V4lsBSRp3onwbMfHRIEV2iRPXsSPvmgVdsiNNDDpVuy8W1iZFU9XhJT6kkIVDrBah26MdwU/GHMsGP4vXEdPDE+GihIG7sG6
+#P:4nPI800vE5YWmv4QvKz5mteUHhKIKdwL4C9qTI81JWbgqmkDwTdDGIRE9PPy6LIC4TkB33DVt1BptNCExyioZORKJPaEm0arFY+H
+#P:LpR337eyHQBgiq8bCte3AOi2ouZ6a2hjJsl3QYa3VlGNc9HOW6oPu2xzW70YzGydNRexghyQp5daYbw8fhdlDmJRxbNizrhtU8y7
+#P:UjOK9R7uo6iPPyWudua4/GkYbZqVmKMTY6RS+fqcAd1FrbDEb5eCrKgwbahwtvhRbt1qpOQBBhsN8FFUxm1OLSK3RIb7ONa6yiGv
+#P:pGm3onYWmERr01eCRROy1sRF6P/Puh5LFXbtczFpKhc1iB1NAKpep+VV9V1NlcEFse5zaI1dKVJaTP+ZeAzYNlRln4FD5MHbV8cl
+#P:GKC2EKhNSz5Jk8utjZV2gwYm5tclOEdRB9pFCvFwpM6SatASZkT9RE30lCwTeLG6xqiOVer7siRpa4/jEyflAvKK4cVIi1ZdICV8
+#P:sm+LN8zFQyA7v7pTg/o7v/HXZ4WUFZgJrNPgpJL/f+Iz//D4KPAve2NOOfB4Tsy6kUqBJ7E5eYZkp4m7Zt3QNB8na39pGT2V+PpW
+#P:X9Xn2DaE5USFAtC07hdMsbkzkKKJtp8kcygEscgApXearmpf7OHb9OrVuu/PVbBiPoQP4AlqLZTqtak76vMiW4JjFRx52bbG8ZQH
+#P:5xAic8B/qMSkgMC9bxW68jBVD/zgJLngObc3SV3wfDxE45nnh8ih2364lk/MWISyyuH45bZnJY1zVlz98DjN6FIU2+3GtJ6spI1E
+#P:feWRgCxy5KYaT55KeV8hGLAYopGw173llmDjtSBlVb9kL6OvQsJ6QvSlQfz8CHSdavMhNnZ4+mkZrSG8uYD8hTmJjDgcJEcA7NqK
+#P:epdH7vWGibXMRusEh24nYgLdzoE7xEaRf3zDEclS9ZlpG+ESZM5PcJyxF7IQ4ykfVZ5M1ARn/8Kia6XPIiRVELBRGLcdTWuUYt8v
+#P:k+j8/e1FqZO4r9LWOqyEcYtmmVo1ZJYyMcVsg4hsijVvvssjqwnUZOJvLnP05WDcqNaET/OKV1IOGhCQBZNksH3QhWZPnZyuCaDp
+#P:W/32c9BqWnNODU50b4zF5DaqqJNjHbzgi5lHpDc1eOdOOSbyWCR4ffgGNgEz77f4f0DzhVmooL525VGFT8+0kVQ0NQPrBIvg64ps
+#P:+XJoT8jv7+MLRkbQlBACaVdO72kfVGF0ogd1B2ErcOTNkf4V3Sbv/e1U5AHqexwGTpTIJF+EZD2l/pp4NNd8XPFLoHY8l4ZrRI/F
+#P:j57dZ7oKwe/g6RFrU3cFE3cCjnLp6A/DBYUmDNDbAItqHiEsB9+khclm1EvBlBH3mMViBANvocu/zh3gG8Fs8GEKt3CZs1wCxfFh
+#P:CpMn+SV2Bd2Vnds9aDiqdXqIzVhQj6duQfRqh9pMJXGRxwfyBFg8cyf8Nx/o4fQG+vt3htNDVu1WrCl9ZHDT8UbM9xhyiLmHXics
+#P:Tm6nHS5tuwtEfz3ZOCnUprqewsw+CZUtmn7J9r663lXG6IClbxsxZ5EzCo5tJhnnEnc41eLAYcC3Fmak75uWf6x88giMQFcsa6tT
+#P:9TDYukC4Cj3SEaEeMjJZWCN9Ut49Cb/C46Z4ftI0BBk4AziCDlnYgPnqjmt9dwF2QrDVMV6C/d47kzZzrhItq+w4xzt04GurAfDw
+#P:78+9jYIeRgMRfSvH8JteQ6gPEhW0nOWN2Kl3TBdKvo077w26UKC4QCqHtYgOrO6zaJKGxRS92+RsDtYeOU/iHiml+7gQJRKj3Erk
+#P:ZP6pKYegngd4wNLZjlkTnOBHVvaBfyGPK5Jf2WfG5MnU6D4SHR2ozz49tuxbcqDZlNZ+yHP62yOtnZCxX/dR7BALKqysH5tPJkut
+#P:s2Oiw97b5BxHY+I/Z8qFny5ybSOWGkABO/4HBbE+PBl2iFRFozsf5ifu81ilEGSZF1Ki2VExMZHzr7qGo8K76tuirnWtqKvE9NFe
+#P:Lq1V806Nkkw4641ZqqmdYevGrMyxRZnA5nAppAO4I46y5YIVVUB7jRttEsMnrvHofD3qSe8ymZ9AU+H8JT4d0zozrMPBqkZ35EtB
+#P:A0sY9hkspvrnVobja0OAot19yqIjYQRAkhynuU5V7119jMMxq+W3M6AFBHh43zK49wFQEQFvmGo4o76t3wEyaV3Feq+ylJ3uIrSa
+#P:B4A7LIrU4unqh6c8AIXDskkwXOJCSyK1d9v473a8PfuZBlUEaCpFmsDnWX1llg802N0WTsken3q1TYTPy5scpHWjiSXALWcP2wBB
+#P:Z3LmOrLm3n1OBdHhdhEmbfCdDsZXUSkXMKw+5NGByBRYPLWTPe2Ig3q04hhtJpCzeKQ6EZSXjgelcQvG6Kp8M+4IPA82cqxGJued
+#P:UJIkSAkFSO9P6k41YDw0yYPvpHybAkQXBhEPmZKenhXjtHwfkRqSxi6PbXWxhToNdbwHV94ir9uiGbOv/ayMxW6Rn8iEnmhA5hkn
+#P:+SLRKui4jrvVbTzVKyaJZ4qAGqXtSckbH9u8Dtg2sKCIxNMysKamwlr/DrtMjMMJ9GfD/kYukAIDfMgQNgeh2npl/+BCFGvL/D/1
+#P:I0fzSgB65FGviI0tt+IsyLOt+ar40ng2xcGPzyzMBv0EqwQT9lUKV9KMnul2rKAeVIyOQseP0hSvi/0Rf0UW5otfGP6v5OG/Xpxb
+#P:n33h4KG5YlPBT3OnuFTjQGQj6nJSJFWbgW0+KBgGt2zoZiRBVb3e4h4s72JTq5pLMSj8PSwfJRlUW4D0daqXYjLVKufWgkVqizyl
+#P:jLGiWYknw2Jpczb8k7be5VG2LWvF8PoTPCYZYWkKqrOkOZNm97xAt1Ccp0jijLyyhdohHIym2DbjeBhC52JKQTj6z0XDKYcVEu8p
+#P:5pCoHq3X9xOtX3VPBHQo6/364RrtzTNIyyrqw9h4uxPyHSH1jkBVTii0R6BkJ+wIUeH0RBBg/AJo9asBX+xVJOgQ3dRVBGzAFtMD
+#P:hZ/wvMt14Siyg6y7hDTyEJ1ynssW+2xsjLt6Qqtt4qKvpAyDS13jY/I6iUUlHF3/uHJxlks+BmlqGVg/+ZqlxrHTztvd0q5SpxPz
+#P:Wyce0wihfpINvP+LlRxZLY0N0Q3BsiLtRGN6cUpz2tE14SbRx4mJP5Emybdhr1e192cTOIE5eBmLs4v/7a2A+z1GAvX8xSF0qhOl
+#P:NydVVEE+3myxClTk3lgqeCN3okQy6nj8wR9o3sWs20Jg/kSpzU20qOm3geZTV9iDW0OAhgxMAhHuyYTd0Cd/EcKZsRbqwjIg0UG6
+#P:gez/vy4BwYwbM818HwWn4Hq2VI+0zMniZyNiLV2hDNIeXI4FnsFS8pAJU7J3zQUp/uNzfrrT+JCd77mmTguBnjYbsQlzDxwxncwE
+#P:smWVk5J7+80+bsM6hmy+9u0uZP7ByxsKB6JbpaFxl+tEOfLojRTjriTs5ve/0wNhudEFaG35/6v7ShNcFFlucBUotj+Ts7OZfQ3R
+#P:htR94cxgH8gTKPiTgaj8OiW1BO320CIosD+JGDSubyXRsu2rKskLmQPJ+3/gtxTJ3aUbMyuiwIoxUXVMlH5vQKwe4FP3yRx97MFJ
+#P:wkxD5ncIbBI96Hdp1WjcI5BRmLaEZKzmxx9VR0gU1JzBUlq7sBKMbV+/VyBjIlP3IvoN2Ebg87ZQ8xF3C0aVuBVhN6U/oi6nOiCE
+#P:IasYG+AOtUkQ1xIeWFaL0n+ef+AGO+EC+IiEhQON7FzyCMZXjlCDsnm8TxKlS746nEGF1GhFsH9dddJzkIXxXh1+NICt1v/wap1Z
+#P:OJA109BNBpl55Aq0MbXkto7Nq3s8SzFmz6gD7RTxUFQp50ZPKdP1mWfnbgekhnInr8wdI23I8kZS0MBrE3FTk3B2LyldNB9i6Y2Z
+#P:EBSA2zrFDOOvxgyBWD0RzYijKxiNL3d0794yf2PcBznSq0wfr2vI3fbcMOqzbjGLsuv5/fgPNAJ9cF3Ptq/AZHAbFiTXOecO3wuB
+#P:gT3tEYnIo/eK44Lt21Fm0IbEdrzNkVJtvwEedqUGu3MHSYZLKBBy9r+OvY0SsiP7qwl9FmZkHIAxAVZMUWKOXoTo3A/lRfNz/nb7
+#P:DvYEoTip7Z26WuzWmF6lhuDOZMxGYd8+CekZ9FlvuXwqbw37um6MqPSBCTmbotBlUy2psRUz7BWyV/Bf8jTuc/wln7CGn1bRamH7
+#P:WVWQELU8Kh4kccmvSsyXbRUIJYsMs4toj84aaMvPkU4SdqWRZuLiwSD8Wy7DynWTPU/zMAEB3lj2GF2qndoFKbRGbWhbj+rRsTMM
+#P:UFkdYQcMGGVXi72UL7suVNFvKrviXpn3CYySx/ffLFd6Ctyg1os3NUHRTr3XVfhE/ot3KrDnBXfoh/mUa/UtuzwJrctPI1yICQTq
+#P:pkQ27JTmVDQzQY9vA1MFLxELwryM8ftzBBJA1iJbO6NgYtyssFu7kWSyHmAUZ5+271xGOLKxHBJkb5nS0siyfu9a4RaBHDMmMVQ6
+#P:YtDgN9zGC+i9c/xGaIqtcqx64GPSZ/CwNLBsU74vQHDGq8GbPX6gLhZxIEcZSFISz5NjpTKeeqQNCakoX4W4HTzfSIuMZAruoJUK
+#P:NfzsKX80IbNjV2KKNzCBltj9JIFtUOi9wo3GcDMmg9XiZDoJb4hEbY4MC667tKtNcVfxSF31yGjs+2AcMjljdX4lfdhuvgKBBLrE
+#P:ZYpQFY9nY18Vmnj69c5kaUVV2JDPRmUNDeH2ECW2FTpZUlVe2xgtoVfHDxBuYQrWRJvj53w3r2eOuA7FHn7AqpKaqT/QyIcxJDVd
+#P:nUhydJoOVFbGFRYtZ1D/VTVeaFE1u8ttc4E1ZFmltHglz8LCJ1eyAkh5ZlCTwOjQ4cjnRh2uv5e8Dt2ClQlczSjAErFNuqWVWIsO
+#P:PqFlxlhTDnlTAHp8Ey/bfX5jrOIboaifytpHlH+t4lIvvyaRt7y7lipZpLxeGPCCp8b77en6S3aTUi48l0w6An1ocvJNNTirRYC2
+#P:Pb4tgxmDvXlIXAF7YPkzSk8aVJANCRuNen3atgqc8R6GBsd15F6+aS6dU4gQ/PrwqgdsWkmIwRw2pHhrU8C76yJbOu1BE36v1+Jh
+#P:Pot5GomowqYF4j+Oj85QBzIrEcfhc+X4jCp9XAoM4K41ldn2JhEN+NmJLi4MHJASkV3K7n1CIBNC5lCznH8IeeP3vNTfL2zZDjjf
+#P:l7cXjPB0yxg10mEWO2x3bLrXhtvESexa/spP/P7Y/p9ohvhT/AuyPMvrGs4yoQ29bma/B6rPFnkEVtMZF3ARXFqNbTvJv9SViL6f
+#P:N6/qYLDZU6xXZQQ0iwxykXcLxifj1P/C1HtPJmv61KGyDx6SOIEipVUuVDcd/8tuX3QA+9SP6IQ0p6VLCF9m8PH/vQ7tKmNw+oy6
+#P:lnQ0EMYPhT4hPJDTSfcIYPsYh+dpRximOPOeOO29EPt4rubHhIpDJWoLqMyQTaf49t6QqlLIcJRaardCTzF/7lEnGDv42iACObvw
+#P:2aNVZs1MSBK3bby3VfVl/AYlddTZPsjWNpz2Nbg794BVz3pWisepX/4qa5CElF4WedrMK8q99jKaz+PoigeKeVgLiHqWxOnTla2+
+#P:N+fQL5Qda+dJ9gr/bwbOYl5Togj9QSzaNcmcl2YAY6VMDG+rVuwYMbNerC5sL5C21xFUpzHey5gBiNsqXlZEjSuCX3978qDB1w9p
+#P:dKO2vxO1UUYZ5Rapg/jDBfxUtoMQamDmzzMhA9W/+YrnJ3t/FCVE0mdG1jAobyLmg6ss+w33vBDwU0upF5uFPYllxNyKhrryWt4u
+#P:B8xnzwaryBSPUuORFwVU5TjShLDwLNBkFwXLkE3fe81PUE2IXqQmfqma4Ainvg4asyIlZE4XONzl5Ib/sPCWGAYy8g5NEUsbcFIx
+#P:jKF1m8vnY1BegAUzP9cEI2vevi2J5a3E0rjDAs5G2e0gSXnfTpnihUoje6I1dH5kADKp1lseeymPecvnJfjO2+ibOUb8wwz8QQhW
+#P:ee5y+HwTE/KLN+jeoJdaRRXsBgwwsZlVgt/RXOqQGuDIade7eTZaids5eqxcD7okun1LEuOpuq0pd4zmDZyhSjn6MIncTQhD3Shc
+#P:44+qmtCNAIsevi4D/4MqSqu10JAa8RHkJ6flZD8cD71FlmoD4enT39G6x2RX6PcyAYSj2CTGP6JnScoJLL3ZB7KmQGrW/ZX9lSev
+#P:k6mYw4gVEVjfRqm0l94JEwTmiBP023JelELc2hU2mnmi8nzT876DkfhdqEo2JHjBczgeZLptqh4raW08hbOdNqU3aFs8MjU+45ye
+#P:CprIXL25bhwA7iXS7Lw98KVlnMmEGmPKn13oz376dY7g+KN84CSjHCGaxVxJCzjBspOt8UYFYlSmNCIfcZtZnilSu+niYxvjY3gB
+#P:HIJ63GJZggxa6Dva9WiaYhk7e5YYj3RxaWk0cjLmSpuR7zXRpJ9lHUFpmPC3PUUXUTI/WUr0c6dPcVKFX+IF20+7hP5V8l17x2xo
+#P:A0Ng1OK8o+NPhlbyb33HIzfVbYQGN/uq9UMqAWg4m7YA8Pb28jP4SWjhaVM+PwQGMxHTV3KN4DNbLrtNcXGovw2YHX87mSUGmYUz
+#P:BhMalxZglExLJ72k1x6bkwCkGIKxjt0VXbCAeg4rNly8eotCec4AAIoHh0CRnpW7AAGfjwGA0AV9Ggi0scRn+wIAAAAABFla
